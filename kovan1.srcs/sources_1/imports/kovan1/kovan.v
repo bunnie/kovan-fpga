@@ -230,6 +230,7 @@ module kovan (
 			 .Q(LCD_CLK_T), .CE(1), .R(0), .S(0) );
 
 
+   ///////////////////////////////////////////
    // audio pass-through -- unbuffurred, unregistered for now
    assign I2SCDCLK1 = I2SCDCLK0;
    assign I2SCLK0 = I2SCLK1;
@@ -237,10 +238,11 @@ module kovan (
    assign I2SDO0 = I2SDO1;
    assign I2SLRCLK1 = I2SLRCLK0;
    
-   // - add I2C unit --> wire up remaining pins to dummy registers
+   ///////////////////////////////////////////
+   // motor control unit
+
    
-   // - motor control unit
-   
+   ///////////////////////////////////////////
    /////// DDR2 core 128 MB x 16 of memory, 312 MHz (624 Mt/s = 1.2 GiB/s)
    // generate a 312 MHz clock from the 26 MHz local buffer
    wire c3_sys_clk;
@@ -255,9 +257,38 @@ module kovan (
    // instantiate the core
    wire c3_clk0; // clock to internal fabric
    wire c3_rst0;
-   wire [31:0] ddr2_read_data;
-   reg [29:0]  ddr2_test_addr;
+   reg [31:0] ddr2_read_data;
+   wire [31:0] ddr2_read_data_c3;
+   reg [31:0]  ddr2_read_data_c3_save;
+   wire [31:0] ddr2_write_data;
+   reg [31:0] ddr2_write_data_c3;
+   wire [29:0]  ddr2_test_addr;
+   reg [29:0]  ddr2_test_addr_c3;
 
+   // local control logic
+   reg 	       ddr2_wren;
+   reg 	       ddr2_rden;
+   reg 	       ddr2_rden_d;
+   reg 	       ddr2_wr_cmd_en;
+   reg 	       ddr2_rd_cmd_en;
+   wire        ddr2_rd_avail_n;
+   wire        ddr2_wr_empty;
+   wire        ddr2_reset;
+
+   // register interface controls
+   wire        ddr2_dowrite;
+   wire        ddr2_doread;
+   wire [7:0]  ddr2_regcmd;
+   reg [7:0]   ddr2_regcmd_c3;
+   reg [7:0]   ddr2_regstat;
+   wire [7:0]  ddr2_regstat_c3;
+
+   wire        ddr2_rdwr;
+   wire        ddr2_docmd;
+   reg 	       ddr2_docmd_d;
+
+   reg [7:0]   ddr2_sm_dbg;
+   
    ddr2_m3_core_v2 ddr2core(
 			    // external wires
 			    .mcb3_dram_dq(mcb3_dram_dq),
@@ -281,7 +312,7 @@ module kovan (
 
 			    // clock and reset
 			    .c3_sys_clk(c3_sys_clk), 
-			    .c3_sys_rst_i(!c3_clk_locked),
+			    .c3_sys_rst_i(ddr2_reset),
 			    .c3_calib_done(c3_calib_done),
 			    .c3_clk0(c3_clk0), 
 			    .c3_rst0(c3_rst0), 
@@ -289,33 +320,216 @@ module kovan (
 			    // internal interfaces. only two brought out here for testing
 			    // port 2 - read-only
 			    .c3_p2_cmd_clk(c3_clk0),
-			    .c3_p2_cmd_en(1'b1),
+			    .c3_p2_cmd_en(ddr2_rd_cmd_en),
 			    .c3_p2_cmd_instr(3'b011),
 			    .c3_p2_cmd_bl(6'b1),
-			    .c3_p2_cmd_byte_addr(ddr2_test_addr),
+			    .c3_p2_cmd_byte_addr(ddr2_test_addr_c3),
 			    .c3_p2_rd_clk(c3_clk0),
-			    .c3_p2_rd_en(ddr2_test_addr[2]),
-			    .c3_p2_rd_data(ddr2_read_data),
+			    .c3_p2_rd_en(ddr2_rden),
+			    .c3_p2_rd_data(ddr2_read_data_c3),
+			    .c3_p2_rd_empty(ddr2_rd_avail_n),
 
 			    // port 3 - write-only
 			    .c3_p3_cmd_clk(c3_clk0),
-			    .c3_p3_cmd_en(1'b1),
+			    .c3_p3_cmd_en(ddr2_wr_cmd_en),
 			    .c3_p3_cmd_instr(3'b010),
 			    .c3_p3_cmd_bl(6'b1),
-			    .c3_p3_cmd_byte_addr(~ddr2_test_addr),
+			    .c3_p3_cmd_byte_addr(ddr2_test_addr_c3),
 			    .c3_p3_wr_clk(c3_clk0),
-			    .c3_p3_wr_en(!ddr2_test_addr[2]),
+			    .c3_p3_wr_en(ddr2_wren),
 			    .c3_p3_wr_mask(4'hf),
-			    .c3_p3_wr_data(ddr2_test_addr + 32'haa55)
+			    .c3_p3_wr_data(ddr2_write_data_c3),
+			    .c3_p3_wr_empty(ddr2_wr_empty)
 			    );
-   
+
+   // datapath wiring
+
+   // retime register interface data to c3 clock domain
    always @(posedge c3_clk0) begin
-      ddr2_test_addr <= ddr2_test_addr + 1;
+      ddr2_write_data_c3 <= ddr2_write_data;
+      ddr2_test_addr_c3 <= ddr2_test_addr;
+      ddr2_regcmd_c3 <= ddr2_regcmd;
+
+      ddr2_docmd_d = ddr2_docmd; // delayed version for rising edge detect
+      ddr2_rden_d <= ddr2_rden;
+      // lock in the data only when we've got it
+      // theory is data is available one clock after rden
+      // timing is unclear though
+      if( ddr2_rden_d ) begin
+	 ddr2_read_data_c3_save <= ddr2_read_data_c3;
+      end else begin
+	 ddr2_read_data_c3_save <= ddr2_read_data_c3_save;
+      end
    end
+
+   // retime c3 clock domain data into the register interface domain
+   always @(posedge clk26buf) begin
+      ddr2_read_data <= ddr2_read_data_c3_save;
+      ddr2_regstat <= ddr2_regstat_c3;
+
+      // debug the state machine (only effective to see if we're wedged, most transitions too fast to catch via I2C)
+      ddr2_sm_dbg[7:4] <= DDR2_WR_cstate[3:0];
+      ddr2_sm_dbg[3:0] <= DDR2_RD_cstate[3:0];
+   end
+
+   // local reset timer for ddr2
+   sync_reset  ddr2_reset(
+			  .clk(c3_clk0),
+			  .glbl_reset(!c3_clk_locked),
+			  .reset(ddr2_reset) );
    
-   assign ddr2_dummy = ^ ddr2_read_data;
+   ////// command and control mappings
+   assign ddr2_regstat_c3[0] = !ddr2_rd_avail_n;
+   assign ddr2_regstat_c3[1] = ddr2_wr_empty;
+   assign ddr2_rdwr = ddr2_regcmd_c3[0]; // 1 is read, 0 is write
+   assign ddr2_docmd = ddr2_regcmd_c3[1];
 
+   ///////////
+   //////// write state machine
+   parameter DDR2_WR_IDLE =    4'b1 << 0;
+   parameter DDR2_WR_DATA =    4'b1 << 1;
+   parameter DDR2_WR_CMD  =    4'b1 << 2;
+   parameter DDR2_WR_WAIT =    4'b1 << 3;
 
+   parameter DDR2_WR_nSTATES = 4;
+
+   reg [(DDR2_WR_nSTATES-1):0] DDR2_WR_cstate = {{(DDR2_WR_nSTATES-1){1'b0}}, 1'b1};
+   reg [(DDR2_WR_nSTATES-1):0] DDR2_WR_nstate;
+
+   always @ (posedge c3_clk0) begin
+      if (ddr2_reset)
+	DDR2_WR_cstate <= DDR2_WR_IDLE; 
+      else
+	DDR2_WR_cstate <= DDR2_WR_nstate;
+   end
+
+   always @ (*) begin
+      case (DDR2_WR_cstate) //synthesis parallel_case full_case
+	DDR2_WR_IDLE: begin
+	   // trigger rising edge of command & rdrw == 0
+	   if( (!ddr2_docmd_d && ddr2_docmd) && !ddr2_rdwr ) begin
+	      DDR2_WR_nstate = DDR2_WR_DATA;
+	   end else begin
+	      DDR2_WR_nstate = DDR2_WR_IDLE;
+	   end
+	end
+	DDR2_WR_DATA: begin
+	   DDR2_WR_nstate = DDR2_WR_CMD;
+	end
+	DDR2_WR_CMD: begin
+	   DDR2_WR_nstate = DDR2_WR_WAIT;
+	end
+	DDR2_WR_WAIT: begin
+	   if( !ddr2_wr_empty ) begin
+	      DDR2_WR_nstate = DDR2_WR_WAIT;
+	   end else begin
+	      DDR2_WR_nstate = DDR2_WR_IDLE;
+	   end
+	end
+      endcase // case (DDR2_WR_cstate)
+   end
+
+   always @ (posedge c3_clk0) begin
+      if( ddr2_reset ) begin
+	 ddr2_wr_cmd_en <= 1'b0;
+	 ddr2_wren <= 1'b0;
+      end else begin
+	 case (DDR2_WR_cstate) //synthesis parallel_case full_case
+	   DDR2_WR_IDLE: begin
+	      ddr2_wr_cmd_en <= 1'b0;
+	      ddr2_wren <= 1'b0;
+	   end
+	   DDR2_WR_DATA: begin
+	      ddr2_wr_cmd_en <= 1'b0;
+	      ddr2_wren <= 1'b1;
+	   end
+	   DDR2_WR_CMD: begin
+	      ddr2_wr_cmd_en <= 1'b1;
+	      ddr2_wren <= 1'b0;
+	   end
+	   DDR2_WR_WAIT: begin
+	      ddr2_wr_cmd_en <= 1'b0;
+	      ddr2_wren <= 1'b0;
+	   end
+	 endcase // case (DDR2_WR_cstate)
+      end // else: !if( ddr2_reset )
+   end // always @ (posedge c3_clk0)
+
+   ///////////
+   //////// read state machine
+   parameter DDR2_RD_IDLE =    4'b1 << 0;
+   parameter DDR2_RD_DATA =    4'b1 << 1;
+   parameter DDR2_RD_CMD  =    4'b1 << 2;
+   parameter DDR2_RD_WAIT =    4'b1 << 3;
+
+   parameter DDR2_RD_nSTATES = 4;
+
+   reg [(DDR2_RD_nSTATES-1):0] DDR2_RD_cstate = {{(DDR2_RD_nSTATES-1){1'b0}}, 1'b1};
+   reg [(DDR2_RD_nSTATES-1):0] DDR2_RD_nstate;
+
+   always @ (posedge c3_clk0) begin
+      if (ddr2_reset)
+	DDR2_RD_cstate <= DDR2_RD_IDLE; 
+      else
+	DDR2_RD_cstate <= DDR2_RD_nstate;
+   end
+
+   always @ (*) begin
+      case (DDR2_RD_cstate) //synthesis parallel_case full_case
+	DDR2_RD_IDLE: begin
+	   // trigger rising edge of command & rdrw == 1
+	   if( (!ddr2_docmd_d && ddr2_docmd) && ddr2_rdwr ) begin
+	      DDR2_RD_nstate = DDR2_RD_CMD;
+	   end else begin
+	      DDR2_RD_nstate = DDR2_RD_IDLE;
+	   end
+	end
+	DDR2_RD_CMD: begin
+	   DDR2_RD_nstate = DDR2_RD_WAIT;
+	end
+	DDR2_RD_WAIT: begin
+	   if( ddr2_rd_avail_n == 1'b0 ) begin
+	      DDR2_RD_nstate = DDR2_RD_DATA;
+	   end else begin
+	      DDR2_RD_nstate = DDR2_RD_WAIT;
+	end
+	DDR2_RD_DATA: begin
+	   if( ddr2_rd_avail_n == 1'b0 ) begin
+	      DDR2_RD_nstate = DDR2_RD_DATA;
+	   end else begin
+	      DDR2_RD_nstate = DDR2_RD_IDLE;
+	   end
+	end
+      endcase // case (DDR2_RD_cstate)
+   end
+
+   always @ (posedge c3_clk0) begin
+      if( ddr2_reset ) begin
+	 ddr2_rd_cmd_en <= 1'b0;
+	 ddr2_rden <= 1'b0;
+      end else begin
+	 case (DDR2_RD_cstate) //synthesis parallel_case full_case
+	   DDR2_RD_IDLE: begin
+	      ddr2_rd_cmd_en <= 1'b0;
+	      ddr2_rden <= 1'b0;
+	   end
+	   DDR2_RD_CMD: begin
+	      ddr2_rd_cmd_en <= 1'b1;
+	      ddr2_rden <= 1'b0;
+	   end
+	   DDR2_RD_WAIT: begin
+	      ddr2_rd_cmd_en <= 1'b0;
+	      ddr2_rden <= 1'b0;
+	   end
+	   DDR2_RD_DATA: begin
+	      ddr2_rd_cmd_en <= 1'b0;
+	      ddr2_rden <= 1'b1;
+	   end
+	 endcase // case (DDR2_RD_cstate)
+      end // else: !if( ddr2_reset )
+   end // always @ (posedge c3_clk0)
+
+   
   //////////////////////////////////////
   // cheezy low speed clock divider source
   //////////////////////////////////////
@@ -328,6 +542,7 @@ module kovan (
       HDCP_AKSV <= Aksv14_write; // retime it into this domain to not screw up timing closure
 `endif
    end
+   
    
    ////////////////////////////////
    // serial number
@@ -372,7 +587,7 @@ module kovan (
       if (dna_reset)
 	DNA_cstate <= DNA_INIT; 
       else
-	DNA_cstate <=#1 DNA_nstate;
+	DNA_cstate <= DNA_nstate;
    end
 
    always @ (*) begin
@@ -401,7 +616,7 @@ module kovan (
 	   dna_pulse <= 1'b0;
 	   dna_shift <= 1'b0;
       end else begin
-	 case (DNA_cstate) //synthesis paralell_case full_case
+	 case (DNA_cstate) //synthesis parallel_case full_case
 	   DNA_INIT: begin
 	      dna_shift_count <= 6'h0;
 	      dna_data <= 56'h0;
@@ -442,6 +657,9 @@ module kovan (
    assign FPGA_LED = blue_led;
 `endif
 
+
+   
+   ////////////////////////////////////////////////////////////////////////////////////
    //// I2C internal control wiring ////
    /////////////////
    /// register 0: control snoop state (SNOOP_CTL r/w)
@@ -586,26 +804,34 @@ module kovan (
    //  register 0x3f: version number
    
 
-   //////////// DEPRACATED REGISTERS ////////////// (but not confident they are dead yet)
-   //  register D: line empty/full levels
-   //  This sets the level at which we declare the line buffers to be "empty" or "full"
-   //  This is on a the granularity of a full video line, not at the pixel level. The
-   //  pixel-level full/empty is hard-coded by the FIFO primitive.
-   //  bit 7 is ignored
-   //  bits [6:4] are the full level target: nominally 2
-   //  bit 3 is ignored
-   //  bits [2:0] are the empty level target: nominally 2
+   ///////////////// EXTENDED REGISTER SET
+   //  register 0x50-53 is write-only: 32-bit test data to write to DDR2 (little endian)
+   //  register 0x54-57 is write-only: 32-bit test address for all DDR2 operations (read and write)
    //
    /////////////////
-   //  register E: write and read initial levels
-   //  This sets the initial state of the write/read pointers, reset on every vsync.
-   //  Note that the actual bit vector that keeps track of active lines can be much longer
-   //  than 4 bits, but we only get to diddle with the bottom four bits in this implementation.
-   //  bits [7:4] are for the write: nominally 1
-   //  bits [3:0] are for the read: nominally 2
+   //  register 0x58 is write-only:
+   //  control commands for DDR2 interfaces
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //         |         |         |         |         |         |  DO_CMD |  RD_WR
+   //  bit 0: select read or write (1 is read, 0 is write)
+   //  bit 1: start the requested command now
    //
    /////////////////
-   //  register F: reserved
+   //  register 0x90-93 is read-only: 32-bit read data from DDR2
+   //
+   /////////////////
+   //  register 0x94 is read-only: 
+   //  status for DDR2 control interface
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //         |         |         |         |         |         | WREMPTY | RDAVAIL
+   //  bit 0: indicates that read data is available
+   //  bit 1: indicates that the write FIFO is empty
+   //
+   /////////////////
+   //  register 0x95 is read-only:
+   //  DDR2 state machine debug
+   //  bits 7-4: wr machine
+   //  bits 3-0: rd machine
    //
 
    wire SDA_pd;
@@ -733,15 +959,34 @@ module kovan (
 		      // extended register space:
 		      // reg 40 - reg 60 are write registers (32 locations, growable to 64)
 		      // reg 80 - reg C0 are read-only registers (64 locations)
-		      .reg_40( ), /// control something (written by host)
-		      .reg_80( ), /// readback something (read by host)
+		      // write-only interfaces
+		      .reg_40( ), 
+		      .reg_50(ddr2_write_data[7:0]),
+		      .reg_51(ddr2_write_data[15:8]),
+		      .reg_52(ddr2_write_data[23:16]),
+		      .reg_53(ddr2_write_data[31:24]),
+		      .reg_54(ddr2_test_addr[7:0]),
+		      .reg_55(ddr2_test_addr[15:8]),
+		      .reg_56(ddr2_test_addr[23:16]),
+		      .reg_57(ddr2_test_addr[31:24]),
+		      .reg_58(ddr2_regcmd[7:0]),
+
+		      // read-only interfaces
+		      .reg_80( ),
+
+		      .reg_90(ddr2_read_data[7:0]),
+		      .reg_91(ddr2_read_data[15:8]),
+		      .reg_92(ddr2_read_data[23:16]),
+		      .reg_93(ddr2_read_data[31:24]),
+		      .reg_94(ddr2_regstat[7:0]),
+		      .reg_95(ddr2_sm_dbg[7:0]),
 
 		      /// extened version -- 32 bits to report versions
-		      /// kovan starts at FF.000000
-		      .reg_fc(8'h0),  // this is the LSB of the extended version field
-		      .reg_fd(8'h0),
-		      .reg_fe(8'h0),
-		      .reg_ff(8'h0)   // this is the MSB of the extended version field
+		      /// kovan starts at FF.01.01.01.01
+		      .reg_fc(8'h1),  // this is the LSB of the extended version field
+		      .reg_fd(8'h1),
+		      .reg_fe(8'h1),
+		      .reg_ff(8'h1)   // this is the MSB of the extended version field
 		      );
      
    /////// version 4 changes
@@ -793,7 +1038,7 @@ module kovan (
    // - fix RGB color depth issue; turns out that extending the LSB's isn't the right way to do it.
    //   now, we truncate the unused bits to zero
 
-   /////// version FF.00000000 changes (log create 2/18/2012)
+   /////// version FF.01.01.01.01 changes (log create 2/18/2012)
    // - branch to kovan
    // - FF means to check auxiliary vesion field
    
