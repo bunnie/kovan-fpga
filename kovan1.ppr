@@ -2,12 +2,13 @@
 <Project Version="4" Minor="27">
 	<FileSet Dir="sources_1" File="fileset.xml"/>
 	<FileSet Dir="constrs_1" File="fileset.xml"/>
+	<RunSet Dir="runs" File="runs.xml"/>
 	<DefaultLaunch Dir="$PRUNDIR"/>
 	<DefaultPromote Dir="$PROMOTEDIR"/>
 	<Config>
 		<Option Name="Part" Val="xc6slx45csg324-2"/>
 		<Option Name="TargetLanguage" Val="Verilog"/>
-		<Option Name="SourceMgmtMode" Val="All"/>
+		<Option Name="SourceMgmtMode" Val="DisplayOnly"/>
 	</Config>
 </Project>
 

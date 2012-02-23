@@ -166,7 +166,6 @@ module kovan (
    wire            clk26;
    wire 	   clk26ibuf;
    wire 	   clk26buf;
-   wire 	   clk26ibuf;
    
    
    assign clk26 = FPGA_SCLK;
@@ -188,13 +187,15 @@ module kovan (
 				  .RESET(glbl_reset),
 				  .LOCKED(qvga_clkgen_locked) );
    
-   reg 		   lcd_pipe_b[5:0];
-   reg 		   lcd_pipe_r[5:0];
-   reg 		   lcd_pipe_g[5:0];
+   reg 	[5:0]	   lcd_pipe_b;
+   reg 	[5:0]	   lcd_pipe_r;
+   reg 	[5:0]	   lcd_pipe_g;
    reg 		   lcd_pipe_den;
    reg 		   lcd_hsync;
    reg 		   lcd_vsync;
    reg 		   lcd_reset_n;
+   reg 		   lcd_pipe_hsync;
+   reg 		   lcd_pipe_vsync;
    wire 	   lcd_reset;
 
    sync_reset  qvga_reset(
@@ -454,7 +455,7 @@ module kovan (
    end
 
    // local reset timer for ddr2
-   sync_reset  ddr2_reset(
+   sync_reset  ddr2_reset_sync(
 			  .clk(c3_clk0),
 			  .glbl_reset(!c3_clk_locked),
 			  .reset(ddr2_reset) );
@@ -573,6 +574,7 @@ module kovan (
 	      DDR2_RD_nstate = DDR2_RD_DATA;
 	   end else begin
 	      DDR2_RD_nstate = DDR2_RD_WAIT;
+	   end
 	end
 	DDR2_RD_DATA: begin
 	   if( ddr2_rd_avail_n == 1'b0 ) begin
@@ -647,7 +649,7 @@ module kovan (
    BUFG clk1M_buf(.I(clk1M_unbuf), .O(clk1M));
 
    wire dna_reset;
-   sync_reset  dna_reset(
+   sync_reset  dna_reset_sync(
 			  .clk(clk_2M),
 			  .glbl_reset(glbl_reset),
 			  .reset(dna_reset) );
@@ -655,6 +657,8 @@ module kovan (
    reg 	dna_pulse;
    reg 	dna_shift;
    wire dna_bit;
+   reg [55:0] dna_data;
+   
    DNA_PORT device_dna( .CLK(clk2M), .DIN(1'b0), .DOUT(dna_bit), .READ(dna_pulse), .SHIFT(dna_shift) );
    
    parameter DNA_INIT =    4'b1 << 0;
@@ -1194,14 +1198,14 @@ module kovan (
 		      .reg_64(ddr2_test_addr[7:0]),
 		      .reg_65(ddr2_test_addr[15:8]),
 		      .reg_66(ddr2_test_addr[23:16]),
-		      .reg_67(ddr2_test_addr[31:24]),
+		      .reg_67(ddr2_test_addr[29:24]),
 		      .reg_68(ddr2_regcmd[7:0]),
 
 		      // read-only interfaces
-		      .reg_80({dig_val_good, dig_busy}),
+		      .reg_80({6'b0,dig_val_good, dig_busy}),
 		      .reg_81(adc_in[7:0]),
-		      .reg_82(6'b000000,adc_in[9:8]),
-		      .reg_83({adc_valid}),
+		      .reg_82({6'b000000,adc_in[9:8]}),
+		      .reg_83({7'b0,adc_valid}),
 
 		      .reg_90(ddr2_read_data[7:0]),
 		      .reg_91(ddr2_read_data[15:8]),

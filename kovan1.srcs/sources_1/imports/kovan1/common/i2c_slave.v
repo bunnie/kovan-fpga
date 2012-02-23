@@ -285,7 +285,7 @@ module i2c_slave (
    parameter EXT_RAM_WIDTH = 8;
    parameter EXT_RAM_ADDR_BITS = 6; // note parameter width exception in reg_a* assign block below
    
-   reg [EXT_RAM_WIDTH-1:0] I2C_regblock_ext [(2**RAM_ADDR_BITS)-1:0];
+   reg [EXT_RAM_WIDTH-1:0] I2C_regblock_ext [(2**EXT_RAM_ADDR_BITS)-1:0];
    reg [EXT_RAM_WIDTH-1:0] I2C_regread_async_ext;
 
    wire [EXT_RAM_ADDR_BITS-1:0] I2C_ramaddr_ext;

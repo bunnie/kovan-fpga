@@ -45,7 +45,7 @@ module robot_iface(
 	     // ADC interface
 	     output reg [9:0] adc_in,
 	     input wire [3:0] adc_chan,    // channels 0-7 are for user, 8-15 are for motor current fbk
-	     output wire      adc_valid,
+	     output reg       adc_valid,
 	     input wire       adc_go,  
 
 	     // motor driver interface
@@ -194,7 +194,7 @@ module robot_iface(
 	   shift_out <= {ana_pu[7:0],dig_pu[7:0],dig_oe_n[7:0],dig_out_val[7:0]};  
 	   shift_in <= shift_in;
 
-	   dig_srload <= chain_detect; // if chain detect is high, we never update the digital SRs
+	   dig_srload <= 1'b0; // just need to create a rising edge on the next transition
 	   update_dig <= 1'b1;
 	   dig_in_val <= dig_in_val;
 	   
@@ -346,7 +346,6 @@ module robot_iface(
    reg 			   adc_go_d;
    reg 			   adc_go_edge;
    reg [4:0] 		   adc_shift_count;
-   reg 			   adc_valid;
    reg [15:0] 		   adc_shift_out;
    reg [15:0] 		   adc_shift_in;
    reg [1:0] 		   adc_cs;
@@ -406,7 +405,7 @@ module robot_iface(
 	end
 	ADC_START: begin
 	   adc_shift_count <= 5'b0;
-	   adc_shift_out <= {11'b0,adc_chan[0:2],2'b0};
+	   adc_shift_out <= {11'b0,adc_chan[0],adc_chan[1],adc_chan[2],2'b0};
 	   adc_shift_in <= adc_shift_in;
 	   adc_cs <= adc_chan[3] ? 2'b01 : 2'b10;
 	   
