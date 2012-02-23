@@ -240,7 +240,88 @@ module kovan (
    
    ///////////////////////////////////////////
    // motor control unit
+   wire clk3p2M; // hooked up down below in the cheezy clock divider section
+   wire [7:0] dig_out_val;
+   wire [7:0] dig_oe;
+   wire [7:0] dig_pu;
+   wire [7:0] ana_pu;
+   wire [7:0] dig_in_val;
+   wire       dig_val_good;
+   wire       dig_busy;
+   wire       dig_sample;
+   wire       dig_update;
 
+   wire [9:0] adc_in;
+   wire [3:0] adc_chan;
+   wire       adc_valid;
+   wire       adc_go;
+
+   wire [15:0] mot_pwm_div;
+   wire [15:0] mot_pwm_duty;
+   wire [7:0]  mot_drive_code;
+   wire        mot_allstop;
+
+   wire [23:0] servo_pwm_period;
+   wire [23:0] servo0_pwm_pulse;
+   wire [23:0] servo1_pwm_pulse;
+   wire [23:0] servo2_pwm_pulse;
+   wire [23:0] servo3_pwm_pulse;
+
+   robot_iface iface(.clk(clk26buf), .glbl_reset(glbl_reset),
+		     .clk_3p2MHz(clk3p2M),
+
+	     // digital i/o block
+	     .dig_out_val(dig_out_val),
+	     .dig_oe(dig_oe),
+	     .dig_pu(dig_pu),
+	     .ana_pu(ana_pu),
+	     .dig_in_val(dig_in_val),
+	     .dig_val_good(dig_val_good), // output value is valid when high
+	     .dig_busy(dig_busy),    // chain is busy when high
+	     .dig_sample(dig_sample),  // samples input on rising edge
+	     .dig_update(dig_update),  // updates chain on rising edge
+
+	     // ADC interface
+	     .adc_in(adc_in),
+	     .adc_chan(adc_chan),    // channels 0-7 are for user, 8-15 are for motor current fbk
+	     .adc_valid(adc_valid),
+	     .adc_go(adc_go),  
+
+	     // motor driver interface
+	     .mot_pwm_div(mot_pwm_div),
+	     .mot_pwm_duty(mot_pwm_duty),
+	     .mot_drive_code(mot_drive_code), // 2 bits/chan, 00 = stop, 01 = forward, 10 = rev, 11 = stop
+	     .mot_allstop(mot_allstop),
+
+	     // servo interface
+	     .servo_pwm_period(servo_pwm_period), // total period for the servo update
+	     .servo0_pwm_pulse(servo0_pwm_pulse), // pulse width in absolute time
+	     .servo1_pwm_pulse(servo1_pwm_pulse),
+	     .servo2_pwm_pulse(servo2_pwm_pulse),
+	     .servo3_pwm_pulse(servo3_pwm_pulse),
+
+	     /////// physical interfaces to outside the chip
+	     // motors
+	     .MBOT(MBOT[3:0]),
+	     .MTOP(MTOP[3:0]),
+	     .MOT_EN(MOT_EN),
+	     .M_SERVO(M_SERVO[3:0]),
+
+	     // analog interface
+	     .DIG_ADC_CS(DIG_ADC_CS),
+	     .DIG_ADC_IN(DIG_ADC_IN),
+	     .DIG_ADC_OUT(DIG_ADC_OUT),
+	     .DIG_ADC_SCLK(DIG_ADC_SCLK),
+
+	     // digital interface
+	     .DIG_IN(DIG_IN),
+	     .DIG_OUT(DIG_OUT),
+	     .DIG_RCLK(DIG_RCLK),
+	     .DIG_SAMPLE(DIG_SAMPLE),
+	     .DIG_SCLK(DIG_SCLK),
+	     .DIG_SRLOAD(DIG_SRLOAD)
+		     );
+   
    
    ///////////////////////////////////////////
    /////// DDR2 core 128 MB x 16 of memory, 312 MHz (624 Mt/s = 1.2 GiB/s)
@@ -535,13 +616,17 @@ module kovan (
   //////////////////////////////////////
    reg [22:0] counter;
 
+   reg 	clk3p2M_unbuf;
    always @(posedge clk26buf) begin
       counter <= counter + 1;
+      clk3p2M_unbuf <= counter[2];
 
 `ifdef HDMI
       HDCP_AKSV <= Aksv14_write; // retime it into this domain to not screw up timing closure
 `endif
    end
+   
+   BUFG clk3p2M_buf(.I(clk3p2M_unbuf), .O(clk3p2M));
    
    
    ////////////////////////////////
@@ -801,15 +886,95 @@ module kovan (
    //
    //  register 0x38-0x3e: device ID (7 bytes)
    //
-   //  register 0x3f: version number
+   //  register 0x3f: version number. Note that value 0xFF means to refer to extended version number
    
 
    ///////////////// EXTENDED REGISTER SET
-   //  register 0x50-53 is write-only: 32-bit test data to write to DDR2 (little endian)
-   //  register 0x54-57 is write-only: 32-bit test address for all DDR2 operations (read and write)
+   //  registers with addresses 0x40-0x7F are write-only
+   //  registers with addresses 0x80-0xFF are read-only
+   /////////////////
+   //
+   //  register 0x40: digital output values for digital bits 7:0
+   //  register 0x41: output enable for digital bits 7:0
+   //  register 0x42: pullup enables for digital bits 7:0
+   //  register 0x43: analog pullup enables for analog bits 7:0
+   //  register 0x44: digital input values for digital bits 7:0
    //
    /////////////////
-   //  register 0x58 is write-only:
+   //  register 0x45: digital shift chain control
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //         |         |         |         |         |         |  SAMPLE |  UPDTE
+   //  bit 0: on rising edge, update the digital pins with the loaded register values
+   //  bit 1: on rising edge, sample all the digital inputs simultaneously
+   //
+   /////////////////
+   //  register 0x46: ADC control
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //         |         |         |    GO   |  CHAN3  |  CHAN2  |  CHAN1 |  CHAN0
+   //  bits 2-0: channel of ADC converter to convert
+   //  bit 3: 1 selects user ADC, 0 selects motor current fbk ADC
+   //
+   /////////////////
+   //  register 0x47: motor control
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //         |         |         |         |         |         |         |  ALLSTP
+   //  bit 0: when set, all motors are immediately stopped
+   //
+   /////////////////
+   //  register 0x48: motor direction
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //  M3D1   |  M3D0   |  M2D1   |  M2D0   |  M1D1   |  M1D0   |  M0D1   |  M0D0
+   //  for all direction 2-bit codes, 10 = forward, 01 = reverse, 11 = short brake, 00 = stop
+   //  note: short brake shorts both motor terminals to ground
+   //        stop just shorts one terminal to ground
+   //  bits 1-0: motor 0 direction
+   //  bits 3-2: motor 1 direction
+   //  bits 5-4: motor 2 direction
+   //  bits 7-6: motor 3 direction
+   //  
+   /////////////////
+   //  register 49-4a: motor PWM duty cycle (MDUTY)
+   //  12-bit value specifying the duty cycle of the motor PWM
+   //  A 12-bit value allows a minimu duty cycle resolution of 1/4095 = 0.02%
+   //
+   /////////////////
+   //  register 4c-4b: motor PWM divider (MDIV)
+   //  16-bit vaule specifying the divider for the motor PWM
+   //  The base clock for the motor PWM is 26 MHz / 4096. The final period for the PWM is thus:
+   //  6.347kHz / ( MDIV + 1 )
+   //
+   /////////////////
+   //  register 4d-4f: servo PWM period (SPERIOD)
+   //  24-bit value which specifies the length of the PWM period for the servo
+   //  Servo PWM is custom-built for specifying sparse, high-resolution narrow pulse widths.
+   //  The period for the servo is defined to be:
+   //  26 MHz / (SPERIOD + 1)
+   //  As SPERIOD is a 24-bit number, the longest period is thus 1.5 Hz.
+   //
+   /////////////////
+   //  register 50-52: servo 0 pulse width (S0PULSE)
+   //  24-bit value which specifies the width of the servo pulse. The quanta for the value is
+   //  1/26 MHz = 38.4ns
+   //  Please note that the pulse width is not a percentage duty cycle, but an absolute time specifier
+   //
+   /////////////////
+   //  register 53-55: servo 1 pulse width (S1PULSE)
+   //  see servo 0 description
+   //
+   /////////////////
+   //  register 58-56: servo 2 pulse width (S2PULSE)
+   //  see servo 0 description
+   //
+   /////////////////
+   //  register 5b-59: servo 3 pulse width (S3PULSE)
+   //  see servo 0 description
+   //
+   /////////////////
+   //  register 0x60-63: 32-bit test data to write to DDR2 (little endian)
+   //  register 0x64-67: 32-bit test address for all DDR2 operations (read and write)
+   //
+   /////////////////
+   //  register 0x68 is write-only:
    //  control commands for DDR2 interfaces
    //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
    //         |         |         |         |         |         |  DO_CMD |  RD_WR
@@ -817,21 +982,49 @@ module kovan (
    //  bit 1: start the requested command now
    //
    /////////////////
+   //
+   //  begin read-only setion
+   //
+   /////////////////
+   //  register 0x80 is the digital I/O status register
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //         |         |         |         |         |         |  DGOOD  |  DBUSY
+   //  bit 0: 1 indicates that the digital shift chain is busy
+   //  bit 1: 1 indicates that the digital input value is good 
+   //         (i.e., updated from most recent sample request)
+   //
+   /////////////////
+   //  register 0x81-82 is the ADC value register (lower 10 bits only)
+   //
+   /////////////////
+   //  register 0x83 is the ADC status register
+   //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
+   //         |         |         |         |         |         |         | AVALID
+   //  bit 0: 1 means that the ADC in value is valid. Cleared when ADC "GO" is triggered.
+   //         insensitive to changes on channel specifier.
+   //
+   /////////////////
    //  register 0x90-93 is read-only: 32-bit read data from DDR2
    //
    /////////////////
-   //  register 0x94 is read-only: 
-   //  status for DDR2 control interface
+   //
+   //  register 0x94 is the status for DDR2 control interface
    //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
    //         |         |         |         |         |         | WREMPTY | RDAVAIL
    //  bit 0: indicates that read data is available
    //  bit 1: indicates that the write FIFO is empty
    //
    /////////////////
-   //  register 0x95 is read-only:
-   //  DDR2 state machine debug
+   //  register 0x95 is for DDR2 state machine debug
    //  bits 7-4: wr machine
    //  bits 3-0: rd machine
+   //
+   /////////////////
+   //  register 0xfc-0xff are the extended version code
+   //  0xfc-0xfd is the implementation revision (16 bits)
+   //  0xfe-0xff is the machine code (16 bits):
+   //     0x0000: reserved
+   //     0x0001: Kovan
    //
 
    wire SDA_pd;
@@ -960,19 +1153,55 @@ module kovan (
 		      // reg 40 - reg 60 are write registers (32 locations, growable to 64)
 		      // reg 80 - reg C0 are read-only registers (64 locations)
 		      // write-only interfaces
-		      .reg_40( ), 
-		      .reg_50(ddr2_write_data[7:0]),
-		      .reg_51(ddr2_write_data[15:8]),
-		      .reg_52(ddr2_write_data[23:16]),
-		      .reg_53(ddr2_write_data[31:24]),
-		      .reg_54(ddr2_test_addr[7:0]),
-		      .reg_55(ddr2_test_addr[15:8]),
-		      .reg_56(ddr2_test_addr[23:16]),
-		      .reg_57(ddr2_test_addr[31:24]),
-		      .reg_58(ddr2_regcmd[7:0]),
+		      .reg_40(dig_out_val),
+		      .reg_41(dig_oe),
+		      .reg_42(dig_pu),
+		      .reg_43(ana_pu),
+		      .reg_44(dig_in_val),
+		      .reg_45({dig_sample,dig_update}),
+		      .reg_46({adc_go,adc_chan[3:0]}),
+		      .reg_47({mot_allstop}),
+		      .reg_48(mot_drive_code),
+		      .reg_49(mot_pwm_duty[7:0]),
+		      .reg_4a(mot_pwm_duty[15:8]),
+		      .reg_4b(mot_pwm_div[7:0]),
+		      .reg_4c(mot_pwm_div[15:8]),
+		      
+		      .reg_4d(servo_pwm_period[7:0]),
+		      .reg_4e(servo_pwm_period[15:8]),
+		      .reg_4f(servo_pwm_period[23:16]),
+		      
+		      .reg_50(servo0_pwm_pulse[7:0]),
+		      .reg_51(servo0_pwm_pulse[15:8]),
+		      .reg_52(servo0_pwm_pulse[23:16]),
+
+		      .reg_53(servo1_pwm_pulse[7:0]),
+		      .reg_54(servo1_pwm_pulse[15:8]),
+		      .reg_55(servo1_pwm_pulse[23:16]),
+
+		      .reg_56(servo2_pwm_pulse[7:0]),
+		      .reg_57(servo2_pwm_pulse[15:8]),
+		      .reg_58(servo2_pwm_pulse[23:16]),
+
+		      .reg_59(servo3_pwm_pulse[7:0]),
+		      .reg_5a(servo3_pwm_pulse[15:8]),
+		      .reg_5b(servo3_pwm_pulse[23:16]),
+		      
+		      .reg_60(ddr2_write_data[7:0]),
+		      .reg_61(ddr2_write_data[15:8]),
+		      .reg_62(ddr2_write_data[23:16]),
+		      .reg_63(ddr2_write_data[31:24]),
+		      .reg_64(ddr2_test_addr[7:0]),
+		      .reg_65(ddr2_test_addr[15:8]),
+		      .reg_66(ddr2_test_addr[23:16]),
+		      .reg_67(ddr2_test_addr[31:24]),
+		      .reg_68(ddr2_regcmd[7:0]),
 
 		      // read-only interfaces
-		      .reg_80( ),
+		      .reg_80({dig_val_good, dig_busy}),
+		      .reg_81(adc_in[7:0]),
+		      .reg_82(6'b000000,adc_in[9:8]),
+		      .reg_83({adc_valid}),
 
 		      .reg_90(ddr2_read_data[7:0]),
 		      .reg_91(ddr2_read_data[15:8]),
@@ -982,11 +1211,11 @@ module kovan (
 		      .reg_95(ddr2_sm_dbg[7:0]),
 
 		      /// extened version -- 32 bits to report versions
-		      /// kovan starts at FF.01.01.01.01
+		      /// kovan starts at FF.00.01.00.01
 		      .reg_fc(8'h1),  // this is the LSB of the extended version field
-		      .reg_fd(8'h1),
+		      .reg_fd(8'h0),
 		      .reg_fe(8'h1),
-		      .reg_ff(8'h1)   // this is the MSB of the extended version field
+		      .reg_ff(8'h0)   // this is the MSB of the extended version field
 		      );
      
    /////// version 4 changes

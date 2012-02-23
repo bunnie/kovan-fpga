@@ -127,12 +127,60 @@ module i2c_slave (
 		  input wire [7:0] reg_3b,
 		  input wire [7:0] reg_3c,
 		  input wire [7:0] reg_3d,
-
 		  input wire [7:0] reg_3e,
+		  
 		  input wire [7:0] reg_3f,
 
 		  output wire [7:0] reg_40,
+		  output wire [7:0] reg_41,
+		  output wire [7:0] reg_42,
+		  output wire [7:0] reg_43,
+		  output wire [7:0] reg_44,
+		  output wire [7:0] reg_45,
+		  output wire [7:0] reg_46,
+		  output wire [7:0] reg_47,
+		  output wire [7:0] reg_48,
+		  output wire [7:0] reg_49,
+		  output wire [7:0] reg_4a,
+		  output wire [7:0] reg_4b,
+		  output wire [7:0] reg_4c,
+		  output wire [7:0] reg_4d,
+		  output wire [7:0] reg_4e,
+		  output wire [7:0] reg_4f,
+		  output wire [7:0] reg_50,
+		  output wire [7:0] reg_51,
+		  output wire [7:0] reg_52,
+		  output wire [7:0] reg_53,
+		  output wire [7:0] reg_54,
+		  output wire [7:0] reg_55,
+		  output wire [7:0] reg_56,
+		  output wire [7:0] reg_57,
+		  output wire [7:0] reg_58,
+		  output wire [7:0] reg_59,
+		  output wire [7:0] reg_5a,
+		  output wire [7:0] reg_5b,
+
+		  output wire [7:0] reg_60,
+		  output wire [7:0] reg_61,
+		  output wire [7:0] reg_62,
+		  output wire [7:0] reg_63,
+		  output wire [7:0] reg_64,
+		  output wire [7:0] reg_65,
+		  output wire [7:0] reg_66,
+		  output wire [7:0] reg_67,
+		  output wire [7:0] reg_68,
+		  
 		  input wire [7:0] reg_80,
+		  input wire [7:0] reg_81,
+		  input wire [7:0] reg_82,
+		  input wire [7:0] reg_83,
+		  
+		  input wire [7:0] reg_90,
+		  input wire [7:0] reg_91,
+		  input wire [7:0] reg_92,
+		  input wire [7:0] reg_93,
+		  input wire [7:0] reg_94,
+		  input wire [7:0] reg_95,
 
 		  input wire [7:0] reg_fc,
 		  input wire [7:0] reg_fd,
@@ -235,7 +283,7 @@ module i2c_slave (
 
    /// extended register set for Kovan
    parameter EXT_RAM_WIDTH = 8;
-   parameter EXT_RAM_ADDR_BITS = 5; // note parameter width exception in reg_a* assign block below
+   parameter EXT_RAM_ADDR_BITS = 6; // note parameter width exception in reg_a* assign block below
    
    reg [EXT_RAM_WIDTH-1:0] I2C_regblock_ext [(2**RAM_ADDR_BITS)-1:0];
    reg [EXT_RAM_WIDTH-1:0] I2C_regread_async_ext;
@@ -589,9 +637,45 @@ module i2c_slave (
    assign reg_1f = I2C_regblock[5'h1f]; // msb of Km
 
    /// extended block
-   assign reg_40 = I2C_regblock_ext[5'h0]; // note the renumbering -- it's (target address - 0x40)
+   assign reg_40 = I2C_regblock_ext[6'h0];  // note the renumbering -- it's (target address - 0x40)
+   assign reg_41 = I2C_regblock_ext[6'h1];
+   assign reg_42 = I2C_regblock_ext[6'h2];
+   assign reg_43 = I2C_regblock_ext[6'h3];
+   assign reg_44 = I2C_regblock_ext[6'h4];
+   assign reg_45 = I2C_regblock_ext[6'h5];
+   assign reg_46 = I2C_regblock_ext[6'h6];
+   assign reg_47 = I2C_regblock_ext[6'h7];
+   assign reg_48 = I2C_regblock_ext[6'h8];
+   assign reg_49 = I2C_regblock_ext[6'h9];
+   assign reg_4a = I2C_regblock_ext[6'ha];
+   assign reg_4b = I2C_regblock_ext[6'hb];
+   assign reg_4c = I2C_regblock_ext[6'hc];
+   assign reg_4d = I2C_regblock_ext[6'hd];
+   assign reg_4e = I2C_regblock_ext[6'he];
+   assign reg_4f = I2C_regblock_ext[6'hf];
+   assign reg_50 = I2C_regblock_ext[6'h10];
+   assign reg_51 = I2C_regblock_ext[6'h11];
+   assign reg_52 = I2C_regblock_ext[6'h12];
+   assign reg_53 = I2C_regblock_ext[6'h13];
+   assign reg_54 = I2C_regblock_ext[6'h14];
+   assign reg_55 = I2C_regblock_ext[6'h15];
+   assign reg_56 = I2C_regblock_ext[6'h16];
+   assign reg_57 = I2C_regblock_ext[6'h17];
+   assign reg_58 = I2C_regblock_ext[6'h18];
+   assign reg_59 = I2C_regblock_ext[6'h19];
+   assign reg_5a = I2C_regblock_ext[6'h1a];
+   assign reg_5b = I2C_regblock_ext[6'h1b];
    
-	  
+   assign reg_60 = I2C_regblock_ext[6'h20];
+   assign reg_61 = I2C_regblock_ext[6'h21];
+   assign reg_62 = I2C_regblock_ext[6'h22];
+   assign reg_63 = I2C_regblock_ext[6'h23];
+   assign reg_64 = I2C_regblock_ext[6'h24];
+   assign reg_65 = I2C_regblock_ext[6'h25];
+   assign reg_66 = I2C_regblock_ext[6'h26];
+   assign reg_67 = I2C_regblock_ext[6'h27];
+   assign reg_68 = I2C_regblock_ext[6'h28];
+      
    always @(*) begin
       case (I2C_addr[7:0])
 	8'h2: begin
@@ -717,10 +801,41 @@ module i2c_slave (
 	   I2C_regread_async = reg_3f;
 	end
 
+	
 	8'h80: begin
 	   I2C_regread_async = reg_80;
 	end
-
+	8'h81: begin
+	   I2C_regread_async = reg_81;
+	end
+	8'h82: begin
+	   I2C_regread_async = reg_82;
+	end
+	8'h83: begin
+	   I2C_regread_async = reg_83;
+	end
+	
+	
+	8'h90: begin
+	   I2C_regread_async = reg_90;
+	end
+	8'h91: begin
+	   I2C_regread_async = reg_91;
+	end
+	8'h92: begin
+	   I2C_regread_async = reg_92;
+	end
+	8'h93: begin
+	   I2C_regread_async = reg_93;
+	end
+	8'h94: begin
+	   I2C_regread_async = reg_94;
+	end
+	8'h95: begin
+	   I2C_regread_async = reg_95;
+	end
+	
+	
 	8'hfc: begin
 	   I2C_regread_async = reg_fc;
 	end
