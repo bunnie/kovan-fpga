@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 13.3
-# Date: Thu Feb 23 19:09:25 2012
+# Date: Fri Feb 24 20:57:26 2012
 #
 ##############################################################
 #
@@ -41,11 +41,11 @@ SELECT Clocking_Wizard xilinx.com:ip:clk_wiz:3.2
 # BEGIN Parameters
 CSET calc_done=DONE
 CSET clk_in_sel_port=CLK_IN_SEL
-CSET clk_out1_port=CLK_OUT1
+CSET clk_out1_port=clk_out6p4
 CSET clk_out1_use_fine_ps_gui=false
-CSET clk_out2_port=CLK_OUT2
+CSET clk_out2_port=clk_out13
 CSET clk_out2_use_fine_ps_gui=false
-CSET clk_out3_port=CLK_OUT3
+CSET clk_out3_port=clk_out3p25
 CSET clk_out3_use_fine_ps_gui=false
 CSET clk_out4_port=CLK_OUT4
 CSET clk_out4_use_fine_ps_gui=false
@@ -74,17 +74,17 @@ CSET clkout1_requested_out_freq=6.41
 CSET clkout1_requested_phase=0.000
 CSET clkout2_drives=BUFG
 CSET clkout2_requested_duty_cycle=50.000
-CSET clkout2_requested_out_freq=100.000
+CSET clkout2_requested_out_freq=13
 CSET clkout2_requested_phase=0.000
-CSET clkout2_used=false
+CSET clkout2_used=true
 CSET clkout3_drives=BUFG
 CSET clkout3_requested_duty_cycle=50.000
-CSET clkout3_requested_out_freq=100.000
+CSET clkout3_requested_out_freq=3.25
 CSET clkout3_requested_phase=0.000
-CSET clkout3_used=false
+CSET clkout3_used=true
 CSET clkout4_drives=BUFG
 CSET clkout4_requested_duty_cycle=50.000
-CSET clkout4_requested_out_freq=100.000
+CSET clkout4_requested_out_freq=2
 CSET clkout4_requested_phase=0.000
 CSET clkout4_used=false
 CSET clkout5_drives=BUFG
@@ -189,7 +189,7 @@ CSET mmcm_notes=None
 CSET mmcm_ref_jitter1=0.010
 CSET mmcm_ref_jitter2=0.010
 CSET mmcm_startup_wait=false
-CSET num_out_clks=1
+CSET num_out_clks=3
 CSET override_dcm=false
 CSET override_dcm_clkgen=false
 CSET override_mmcm=false
@@ -197,16 +197,16 @@ CSET override_pll=false
 CSET platform=nt64
 CSET pll_bandwidth=OPTIMIZED
 CSET pll_clk_feedback=CLKFBOUT
-CSET pll_clkfbout_mult=18
+CSET pll_clkfbout_mult=16
 CSET pll_clkfbout_phase=0.000
 CSET pll_clkin_period=38.461
-CSET pll_clkout0_divide=73
+CSET pll_clkout0_divide=65
 CSET pll_clkout0_duty_cycle=0.500
 CSET pll_clkout0_phase=0.000
-CSET pll_clkout1_divide=1
+CSET pll_clkout1_divide=32
 CSET pll_clkout1_duty_cycle=0.500
 CSET pll_clkout1_phase=0.000
-CSET pll_clkout2_divide=1
+CSET pll_clkout2_divide=128
 CSET pll_clkout2_duty_cycle=0.500
 CSET pll_clkout2_phase=0.000
 CSET pll_clkout3_divide=1
@@ -263,4 +263,4 @@ CSET use_status=false
 MISC pkg_timestamp=2011-03-09T16:42:33.000Z
 # END Extra information
 GENERATE
-# CRC: 4d903e43
+# CRC: 923f793b

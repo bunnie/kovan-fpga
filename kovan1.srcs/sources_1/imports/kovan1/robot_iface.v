@@ -80,7 +80,8 @@ module robot_iface(
 	     output wire       DIG_RCLK,
 	     output wire       DIG_SAMPLE,
 	     output wire       DIG_SCLK,
-	     output wire       DIG_SRLOAD
+	     output wire       DIG_SRLOAD,
+	     output wire       DIG_CLR_N
 	     );
 
    ///////////////// digital i/o interface and pull-up control
@@ -96,6 +97,7 @@ module robot_iface(
 			  .glbl_reset(glbl_reset),
 			  .reset(motor_reset) );
 
+   assign DIG_CLR_N = !motor_reset;
    assign DIG_SAMPLE = dinsamp;
    
    always @(posedge clk) begin
@@ -203,7 +205,7 @@ module robot_iface(
 	end
 	SR_SHIFT_DIG: begin
 	   shift_count <= shift_count + 6'b1;
-	   shift_in <= {shift_in[38:0],DIG_OUT};
+	   shift_in[39:0] <= {shift_in[38:0],DIG_OUT};
 	   shift_out <= {shift_out[30:0],1'b1};
 	   
 	   dig_srload <= 1'b1;
@@ -215,7 +217,7 @@ module robot_iface(
 	end
 	SR_SHIFT_DIG_TERM: begin
 	   shift_count <= shift_count + 6'b1;
-	   shift_in <= {shift_in[38:0],DIG_OUT};
+	   shift_in[39:0] <= {shift_in[38:0],DIG_OUT};
 	   shift_out <= {shift_out[30:0],1'b1};
 	   
 	   dig_srload <= 1'b1;
@@ -240,12 +242,15 @@ module robot_iface(
       endcase // case (SR_cstate)
    end // always @ (posedge clk)
    
-   assign DIG_SCLK = !clk;
+   ODDR2 dig_clk_mirror (.D0(1'b0), .D1(1'b1),  // not inversion of clk
+			 .C0(clk), .C1(!clk), 
+			 .Q(DIG_SCLK), .CE(1'b1), .R(1'b0), .S(1'b0) );
+   
    assign DIG_IN = shift_out[31];
    assign DIG_RCLK = update_dig;
-   // OR srload with ! clock, so as to avoid a race condition with rising edge flops,
-   // i.e. you don't want to be loading the flop any where near the shifting of the flop
-   assign DIG_SRLOAD = dig_srload | clk;
+   
+   // TODO: check if srload is glitch-free, as it is asynchronous
+   assign DIG_SRLOAD = dig_srload;
 
    
    /////////////////////////////////
@@ -415,7 +420,7 @@ module robot_iface(
 	ADC_SHIFT: begin
 	   adc_shift_count <= adc_shift_count + 6'b1;
 	   adc_shift_out <= {adc_shift_out[14:0],1'b1};
-	   adc_shift_in <= {adc_shift_in[14:0], DIG_ADC_OUT};
+	   adc_shift_in[15:0] <= {adc_shift_in[14:0], DIG_ADC_OUT};
 	   adc_cs <= adc_cs;
 	   
 	   adc_valid <= 0;
@@ -424,7 +429,7 @@ module robot_iface(
 	ADC_SHIFT_TERM: begin
 	   adc_shift_count <= adc_shift_count + 6'b1;
 	   adc_shift_out <= {adc_shift_out[14:0],1'b1};
-	   adc_shift_in <= {adc_shift_in[14:0], DIG_ADC_OUT};
+	   adc_shift_in[15:0] <= {adc_shift_in[14:0], DIG_ADC_OUT};
 	   adc_cs <= adc_cs;
 	   
 	   adc_valid <= 0;
@@ -442,7 +447,10 @@ module robot_iface(
       endcase // case (ADC_cstate)
    end // always @ (posedge clk)
 
-   assign DIG_ADC_SCLK = !clk_3p2MHz;
+   ODDR2 adc_clk_mirror (.D0(1'b0), .D1(1'b1),   // note inversion of clk_3p2MHz
+			 .C0(clk_3p2MHz), .C1(!clk_3p2MHz), 
+			 .Q(DIG_ADC_SCLK), .CE(1'b1), .R(1'b0), .S(1'b0) );
+   
    assign DIG_ADC_IN = adc_shift_out[15];
    assign DIG_ADC_CS[1:0] = adc_cs[1:0];
    

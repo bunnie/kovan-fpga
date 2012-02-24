@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 13.3
-# Date: Thu Feb 23 19:08:39 2012
+# Date: Fri Feb 24 15:25:23 2012
 #
 ##############################################################
 #
@@ -68,7 +68,7 @@ CSET clkin1_jitter_ps=384.61
 CSET clkin1_ui_jitter=0.010
 CSET clkin2_jitter_ps=100.0
 CSET clkin2_ui_jitter=0.010
-CSET clkout1_drives=BUFG
+CSET clkout1_drives=No_buffer
 CSET clkout1_requested_duty_cycle=50.0
 CSET clkout1_requested_out_freq=312
 CSET clkout1_requested_phase=0.000
@@ -140,7 +140,7 @@ CSET din_port=DIN
 CSET dout_port=DOUT
 CSET drdy_port=DRDY
 CSET dwe_port=DWE
-CSET feedback_source=FDBK_AUTO
+CSET feedback_source=FDBK_ONCHIP
 CSET in_freq_units=Units_MHz
 CSET in_jitter_units=Units_UI
 CSET input_clk_stopped_port=INPUT_CLK_STOPPED
@@ -225,7 +225,7 @@ CSET pll_ref_jitter=0.010
 CSET power_down_port=POWER_DOWN
 CSET prim_in_freq=26
 CSET prim_in_jitter=0.010
-CSET prim_source=Single_ended_clock_capable_pin
+CSET prim_source=No_buffer
 CSET primary_port=CLK_IN1
 CSET primitive=MMCM
 CSET primtype_sel=DCM_SP
@@ -263,4 +263,4 @@ CSET use_status=false
 MISC pkg_timestamp=2011-03-09T16:42:33.000Z
 # END Extra information
 GENERATE
-# CRC: 6361a0fa
+# CRC: 721f57bd

@@ -13,7 +13,7 @@ CONFIG VCCAUX  = 3.3;
 ##################
 
 ## clocks
-NET "FPGA_SCLK" TNM_NET = "TNM_clk26";
+NET "OSC_CLK" TNM_NET = "TNM_clk26";
 TIMESPEC "TS_clk26" = PERIOD "TNM_clk26" 26 MHz HIGH 50;
 
 
@@ -62,16 +62,16 @@ NET "CEC" LOC = N5;
 NET "CEC" IOSTANDARD = LVCMOS33;
 # HDMI DDC pins
 NET "DDC_SCL_LV_N" LOC = T4;
-NET "DDC_SCL_LV_N" IOSTANDARD = TMDS_33;
+NET "DDC_SCL_LV_N" IOSTANDARD = LVCMOS33;
 NET "DDC_SDA_LV_N" LOC = R5;
-NET "DDC_SDA_LV_N" IOSTANDARD = TMDS_33;
+NET "DDC_SDA_LV_N" IOSTANDARD = LVCMOS33;
 NET "DDC_SDA_PD" LOC = V4;
 NET "DDC_SDA_PD" IOSTANDARD = LVCMOS33;
 NET "DDC_SDA_PU" LOC = T3;
 NET "DDC_SDA_PU" IOSTANDARD = LVCMOS33;
 # HDMI hot plug detect ins
-NET "HDMI_HPD_LL_N" LOC = P6;
-NET "HDMI_HPD_LL_N" IOSTANDARD = LVCMOS33;
+NET "HPD_N" LOC = P6;
+NET "HPD_N" IOSTANDARD = LVCMOS33;
 NET "HPD_OVERRIDE" LOC = R3;
 NET "HPD_OVERRIDE" IOSTANDARD = LVCMOS33;
 # HDMI genlock feedback
@@ -125,8 +125,8 @@ NET "DIG_ADC_OUT" LOC = R11;
 NET "DIG_ADC_OUT" IOSTANDARD = LVCMOS33;
 NET "DIG_ADC_SCLK" LOC = T11;
 NET "DIG_ADC_SCLK" IOSTANDARD = LVCMOS33;
-NET "DIG_CLR" LOC = P16;
-NET "DIG_CLR" IOSTANDARD = LVCMOS33;
+NET "DIG_CLR_N" LOC = P16;
+NET "DIG_CLR_N" IOSTANDARD = LVCMOS33;
 NET "DIG_IN" LOC = R10;
 NET "DIG_IN" IOSTANDARD = LVCMOS33;
 NET "DIG_OUT" LOC = L16;
@@ -247,7 +247,7 @@ NET "LCDO_R[6]" IOSTANDARD = LVCMOS33;
 NET "LCDO_R[7]" LOC = P18;
 NET "LCDO_R[7]" IOSTANDARD = LVCMOS33;
 NET "LCDO_RESET_N" LOC = D18;
-NET "LCDO_RESET_N" IOSTANDARD = TMDS_33;
+NET "LCDO_RESET_N" IOSTANDARD = LVCMOS33;
 NET "LCDO_VSYNC" LOC = T18;
 NET "LCDO_VSYNC" IOSTANDARD = LVCMOS33;
 NET "LCD_B[0]" LOC = A11;
@@ -357,7 +357,7 @@ NET "FPGA_LED" IOSTANDARD = LVCMOS33;
 ############################################################################
 ## Clock constraints                                                        
 ############################################################################
-NET "memc3_infrastructure_inst/sys_clk_ibufg" TNM_NET = "SYS_CLK3";
+NET "ddr2core/memc3_infrastructure_inst/sys_clk_ibufg" TNM_NET = "SYS_CLK3";
 TIMESPEC "TS_SYS_CLK3" = PERIOD "SYS_CLK3"  3.2  ns HIGH 50 %;
 ############################################################################
 

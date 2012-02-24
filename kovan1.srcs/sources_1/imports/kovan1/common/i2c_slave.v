@@ -40,10 +40,8 @@
 module i2c_slave (
 		  // external host interface
 		  input wire   SCL,      // the SCL pin state
-		  output wire  SCL_pd,  // signals to IOB to pull the SCL bus low
 		  input wire   SDA,
 		  output reg   SDA_pd,
-		  output wire  SDA_pu,  // for overriding SDA...in the future.
 
 		  input wire   clk,     // internal FPGA clock
 		  input wire   glbl_reset,   // internal FPGA reset
@@ -135,7 +133,7 @@ module i2c_slave (
 		  output wire [7:0] reg_41,
 		  output wire [7:0] reg_42,
 		  output wire [7:0] reg_43,
-		  output wire [7:0] reg_44,
+//		  output wire [7:0] reg_44,
 		  output wire [7:0] reg_45,
 		  output wire [7:0] reg_46,
 		  output wire [7:0] reg_47,
@@ -174,6 +172,7 @@ module i2c_slave (
 		  input wire [7:0] reg_81,
 		  input wire [7:0] reg_82,
 		  input wire [7:0] reg_83,
+		  input wire [7:0] reg_84,
 		  
 		  input wire [7:0] reg_90,
 		  input wire [7:0] reg_91,
@@ -213,10 +212,6 @@ module i2c_slave (
    // For the demo board, a 25 MHz clock is provided, and 0.125us ~ 4 cycles
    // At 100kHz operation, 10us is a cycle, so 0.5us ~ 12 cycles
    parameter TRF_CYCLES = 5'd4;  // number of cycles for rise/fall time
-   
-   // just some tie-offs for future functionality not yet implemented...
-   assign SDA_pu = 1'b0;
-   assign SCL_pd = 1'b0;
    
    ////////////////
    ///// protocol-level state machine
@@ -641,7 +636,7 @@ module i2c_slave (
    assign reg_41 = I2C_regblock_ext[6'h1];
    assign reg_42 = I2C_regblock_ext[6'h2];
    assign reg_43 = I2C_regblock_ext[6'h3];
-   assign reg_44 = I2C_regblock_ext[6'h4];
+//   assign reg_44 = I2C_regblock_ext[6'h4];
    assign reg_45 = I2C_regblock_ext[6'h5];
    assign reg_46 = I2C_regblock_ext[6'h6];
    assign reg_47 = I2C_regblock_ext[6'h7];
@@ -813,6 +808,9 @@ module i2c_slave (
 	end
 	8'h83: begin
 	   I2C_regread_async = reg_83;
+	end
+	8'h84: begin
+	   I2C_regread_async = reg_84;
 	end
 	
 	

@@ -75,6 +75,7 @@ module kovan (
 	      output wire       DIG_SAMPLE,
 	      output wire       DIG_SCLK,
 	      output wire       DIG_SRLOAD,
+	      output wire       DIG_CLR_N,
 
 	      // motor direct drive interfaces
 	      output wire [3:0] MBOT,
@@ -93,16 +94,16 @@ module kovan (
 	      input wire        INPUT_SW0,
 
 	      // audio pass-through
-	      input wire        I2SCDCLK0, // master reference clock to audio PLL
-	      output wire       I2SCDCLK1,
-	      output wire       I2SCLK0,   // return sample clock to CPU
-	      input wire        I2SCLK1,
-	      input wire        I2SDI0,    // audio data to playback
-	      output wire       I2SDI1,
-	      output wire       I2SDO0,    // audio data from record
-	      input wire        I2SDO1,
-	      input wire        I2SLRCLK0, // left/right clock to codec
-	      output wire       I2SLRCLK1,
+	      input wire        I2S_CDCLK0, // master reference clock to audio PLL
+	      output wire       I2S_CDCLK1,
+	      output wire       I2S_CLK0,   // return sample clock to CPU
+	      input wire        I2S_CLK1,
+	      input wire        I2S_DI0,    // audio data to playback
+	      output wire       I2S_DI1,
+	      output wire       I2S_DO0,    // audio data from record
+	      input wire        I2S_DO1,
+	      input wire        I2S_LRCLK0, // left/right clock to codec
+	      output wire       I2S_LRCLK1,
 
 	      // LCD output to display
 	      output wire [7:3] LCDO_B,  // note truncation of blue channel
@@ -128,7 +129,7 @@ module kovan (
 	      // SSP interface to the CPU
 	      output wire       FPGA_MISO,
 	      input wire        FPGA_MOSI,
-	      input wire        FPGA_SCLK,  // this needs to be fixed to 26 MHz
+	      input wire        FPGA_SCLK,
 	      input wire        FPGA_SYNC,
 
 	      // I2C interfaces
@@ -136,7 +137,7 @@ module kovan (
 	      inout wire        PWR_SDA,
 
 	      input wire        XI2CSCL,  // our primary interface
-	      inout wire        Xi2CSDA,
+	      inout wire        XI2CSDA,
 
 	      // LED
 	      output wire       FPGA_LED,
@@ -159,16 +160,19 @@ module kovan (
 	      inout                                mcb3_dram_dqs,
 	      inout                                mcb3_dram_dqs_n,
 	      output                               mcb3_dram_ck,
-	      output                               mcb3_dram_ck_n
+	      output                               mcb3_dram_ck_n,
+
+	      input wire       OSC_CLK   // 26 mhz clock from CPU
 	      );
 
    ///////// clock buffers
    wire            clk26;
    wire 	   clk26ibuf;
    wire 	   clk26buf;
+   wire 	   clk13buf;
+   wire            clk3p2M; 
    
-   
-   assign clk26 = FPGA_SCLK;
+   assign clk26 = OSC_CLK;
    IBUFG clk26buf_ibuf(.I(clk26), .O(clk26ibuf));
    BUFG clk26buf_buf (.I(clk26ibuf), .O(clk26buf));
 
@@ -183,7 +187,9 @@ module kovan (
    wire            qvga_clkgen_locked;
    
    clk_wiz_v3_2_qvga qvga_clkgen( .CLK_IN1(clk26buf),
-				  .CLK_OUT1(clk_qvga),
+				  .clk_out6p4(clk_qvga),
+				  .clk_out13(clk13buf),
+				  .clk_out3p25(clk3p2M), // note: a slight overclock (about 2%)
 				  .RESET(glbl_reset),
 				  .LOCKED(qvga_clkgen_locked) );
    
@@ -200,7 +206,7 @@ module kovan (
 
    sync_reset  qvga_reset(
 			  .clk(clk_qvga),
-			  .glbl_reset(glbl_reset),
+			  .glbl_reset(glbl_reset || !qvga_clkgen_locked),
 			  .reset(lcd_reset) );
    always @(posedge clk_qvga) begin
       // TODO: assign timing constraints to ensure hold times met for LCD
@@ -224,24 +230,23 @@ module kovan (
    // low-skew clock mirroring to an output pin requires this hack
    ODDR2 qvga_clk_to_lcd (.D0(1'b1), .D1(1'b0), 
 			  .C0(clk_qvga), .C1(!clk_qvga), 
-			  .Q(LCDO_DOTCLK), .CE(1), .R(0), .S(0) );
+			  .Q(LCDO_DOTCLK), .CE(1'b1), .R(1'b0), .S(1'b0) );
 
    ODDR2 qvga_clk_to_cpu (.D0(1'b1), .D1(1'b0), 
 			 .C0(clk_qvga), .C1(!clk_qvga), 
-			 .Q(LCD_CLK_T), .CE(1), .R(0), .S(0) );
+			 .Q(LCD_CLK_T), .CE(1'b1), .R(1'b0), .S(1'b0) );
 
 
    ///////////////////////////////////////////
    // audio pass-through -- unbuffurred, unregistered for now
-   assign I2SCDCLK1 = I2SCDCLK0;
-   assign I2SCLK0 = I2SCLK1;
-   assign I2SDI1 = I2SDI0;
-   assign I2SDO0 = I2SDO1;
-   assign I2SLRCLK1 = I2SLRCLK0;
+   assign I2S_CDCLK1 = I2S_CDCLK0;
+   assign I2S_CLK0 = I2S_CLK1;
+   assign I2S_DI1 = I2S_DI0;
+   assign I2S_DO0 = I2S_DO1;
+   assign I2S_LRCLK1 = I2S_LRCLK0;
    
    ///////////////////////////////////////////
    // motor control unit
-   wire clk3p2M; // hooked up down below in the cheezy clock divider section
    wire [7:0] dig_out_val;
    wire [7:0] dig_oe;
    wire [7:0] dig_pu;
@@ -268,7 +273,7 @@ module kovan (
    wire [23:0] servo2_pwm_pulse;
    wire [23:0] servo3_pwm_pulse;
 
-   robot_iface iface(.clk(clk26buf), .glbl_reset(glbl_reset),
+   robot_iface iface(.clk(clk13buf), .glbl_reset(glbl_reset),
 		     .clk_3p2MHz(clk3p2M),
 
 	     // digital i/o block
@@ -320,7 +325,8 @@ module kovan (
 	     .DIG_RCLK(DIG_RCLK),
 	     .DIG_SAMPLE(DIG_SAMPLE),
 	     .DIG_SCLK(DIG_SCLK),
-	     .DIG_SRLOAD(DIG_SRLOAD)
+	     .DIG_SRLOAD(DIG_SRLOAD),
+	     .DIG_CLR_N(DIG_CLR_N)
 		     );
    
    
@@ -329,12 +335,19 @@ module kovan (
    // generate a 312 MHz clock from the 26 MHz local buffer
    wire c3_sys_clk;
    wire c3_clk_locked;
+   wire c3_clk_fb_from_clkgen;
+   wire c3_clk_fb_to_clkgen;
    clk_ddr2_26m_312m ddr2_clk(
 			      .CLK_IN1(clk26buf),
+			      .CLKFB_IN(c3_clk_fb_to_clkgen),
 			      .CLK_OUT1(c3_sys_clk),
+			      .CLKFB_OUT(c3_clk_fb_from_clkgen),
 			      .RESET(glbl_reset),
 			      .LOCKED(c3_clk_locked)
 			      );
+   BUFG ddr2_clkf_buf
+     (.O (c3_clk_fb_to_clkgen),
+      .I (c3_clk_fb_from_clkgen));
 
    // instantiate the core
    wire c3_clk0; // clock to internal fabric
@@ -463,6 +476,7 @@ module kovan (
    ////// command and control mappings
    assign ddr2_regstat_c3[0] = !ddr2_rd_avail_n;
    assign ddr2_regstat_c3[1] = ddr2_wr_empty;
+   assign ddr2_regstat_c3[2] = c3_calib_done;
    assign ddr2_rdwr = ddr2_regcmd_c3[0]; // 1 is read, 0 is write
    assign ddr2_docmd = ddr2_regcmd_c3[1];
 
@@ -479,7 +493,7 @@ module kovan (
    reg [(DDR2_WR_nSTATES-1):0] DDR2_WR_nstate;
 
    always @ (posedge c3_clk0) begin
-      if (ddr2_reset)
+      if (c3_rst0)
 	DDR2_WR_cstate <= DDR2_WR_IDLE; 
       else
 	DDR2_WR_cstate <= DDR2_WR_nstate;
@@ -512,7 +526,7 @@ module kovan (
    end
 
    always @ (posedge c3_clk0) begin
-      if( ddr2_reset ) begin
+      if( c3_rst0 ) begin
 	 ddr2_wr_cmd_en <= 1'b0;
 	 ddr2_wren <= 1'b0;
       end else begin
@@ -550,7 +564,7 @@ module kovan (
    reg [(DDR2_RD_nSTATES-1):0] DDR2_RD_nstate;
 
    always @ (posedge c3_clk0) begin
-      if (ddr2_reset)
+      if (c3_rst0)
 	DDR2_RD_cstate <= DDR2_RD_IDLE; 
       else
 	DDR2_RD_cstate <= DDR2_RD_nstate;
@@ -587,7 +601,7 @@ module kovan (
    end
 
    always @ (posedge c3_clk0) begin
-      if( ddr2_reset ) begin
+      if( c3_rst0 ) begin
 	 ddr2_rd_cmd_en <= 1'b0;
 	 ddr2_rden <= 1'b0;
       end else begin
@@ -618,25 +632,19 @@ module kovan (
   //////////////////////////////////////
    reg [22:0] counter;
 
-   reg 	clk3p2M_unbuf;
    always @(posedge clk26buf) begin
       counter <= counter + 1;
-      clk3p2M_unbuf <= counter[2];
 
 `ifdef HDMI
       HDCP_AKSV <= Aksv14_write; // retime it into this domain to not screw up timing closure
 `endif
    end
    
-   BUFG clk3p2M_buf(.I(clk3p2M_unbuf), .O(clk3p2M));
-   
    
    ////////////////////////////////
    // serial number
    ////////////////////////////////
    reg clk2M_unbuf;
-   (* clock_signal = "yes" *)
-   (* PERIOD = "period 0.8125 MHz" *)
    wire clk2M;
    wire clk1M;
    reg 	clk1M_unbuf;
@@ -902,7 +910,6 @@ module kovan (
    //  register 0x41: output enable for digital bits 7:0
    //  register 0x42: pullup enables for digital bits 7:0
    //  register 0x43: analog pullup enables for analog bits 7:0
-   //  register 0x44: digital input values for digital bits 7:0
    //
    /////////////////
    //  register 0x45: digital shift chain control
@@ -1007,6 +1014,10 @@ module kovan (
    //  bit 0: 1 means that the ADC in value is valid. Cleared when ADC "GO" is triggered.
    //         insensitive to changes on channel specifier.
    //
+   //
+   /////////////////
+   //  register 0x84 is the digital interface input levels
+   //
    /////////////////
    //  register 0x90-93 is read-only: 32-bit read data from DDR2
    //
@@ -1014,9 +1025,10 @@ module kovan (
    //
    //  register 0x94 is the status for DDR2 control interface
    //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
-   //         |         |         |         |         |         | WREMPTY | RDAVAIL
+   //         |         |         |         |         | CALDONE | WREMPTY | RDAVAIL
    //  bit 0: indicates that read data is available
    //  bit 1: indicates that the write FIFO is empty
+   //  bit 2: indicates that the DDR2 interface's calibration is done
    //
    /////////////////
    //  register 0x95 is for DDR2 state machine debug
@@ -1031,12 +1043,10 @@ module kovan (
    //     0x0001: Kovan
    //
 
-   wire SDA_pd;
    wire [7:0] reg_addr;
    wire       wr_stb;
    wire [7:0] reg_data_in;
    wire [7:0] reg_a2;
-   wire       SDA_int;
    wire [7:0] snoop_ctl;
    wire [7:0] snoop_rbk_adr;
    wire [7:0] snoop_rbk_dat;
@@ -1057,10 +1067,12 @@ module kovan (
    end
 `endif
    
-   IOBUF #(.DRIVE(8), .SLEW("SLOW")) IOBUF_sda (.IO(SDA), .I(1'b0), .T(!SDA_pd), .O(SDA_int));
+   wire       SDA_pd;
+   wire       SDA_int;
+   IOBUF #(.DRIVE(8), .SLEW("SLOW")) IOBUF_sda (.IO(XI2CSDA), .I(1'b0), .T(!SDA_pd), .O(SDA_int));
 
    i2c_slave host_i2c(
-		      .SCL(SCL),
+		      .SCL(XI2CSCL),
 		      .SDA(SDA_int),
 		      .SDA_pd(SDA_pd),
 
@@ -1161,7 +1173,7 @@ module kovan (
 		      .reg_41(dig_oe),
 		      .reg_42(dig_pu),
 		      .reg_43(ana_pu),
-		      .reg_44(dig_in_val),
+		      // reg_44 unused
 		      .reg_45({dig_sample,dig_update}),
 		      .reg_46({adc_go,adc_chan[3:0]}),
 		      .reg_47({mot_allstop}),
@@ -1206,6 +1218,7 @@ module kovan (
 		      .reg_81(adc_in[7:0]),
 		      .reg_82({6'b000000,adc_in[9:8]}),
 		      .reg_83({7'b0,adc_valid}),
+		      .reg_84(dig_in_val[7:0]),
 
 		      .reg_90(ddr2_read_data[7:0]),
 		      .reg_91(ddr2_read_data[15:8]),
@@ -1275,5 +1288,29 @@ module kovan (
    // - branch to kovan
    // - FF means to check auxiliary vesion field
    
+
+
+   /////////////// dummy tie-downs
+`ifdef HDMI
+
+`else
+   // dummy tie-downs to make UCF constraints happy when there is no HDMI interface
+   wire [3:0] dummy_tmds;
+   
+   IBUFDS  #(.IOSTANDARD("TMDS_33"), .DIFF_TERM("FALSE") 
+	     ) ibuf_dummy0 (.I(RX0_TMDS_P[0]), .IB(RX0_TMDS_N[0]), .O(dummy_tmds[0]));
+   IBUFDS  #(.IOSTANDARD("TMDS_33"), .DIFF_TERM("FALSE") 
+	     ) ibuf_dummy1 (.I(RX0_TMDS_P[1]), .IB(RX0_TMDS_N[1]), .O(dummy_tmds[1]));
+   IBUFDS  #(.IOSTANDARD("TMDS_33"), .DIFF_TERM("FALSE") 
+	     ) ibuf_dummy2 (.I(RX0_TMDS_P[2]), .IB(RX0_TMDS_N[2]), .O(dummy_tmds[2]));
+   IBUFDS  #(.IOSTANDARD("TMDS_33"), .DIFF_TERM("FALSE") 
+	     ) ibuf_dummy3 (.I(RX0_TMDS_P[3]), .IB(RX0_TMDS_N[3]), .O(dummy_tmds[3]));
+
+   OBUFDS TMDS0 (.I(1'b0), .O(TX0_TMDS_P[0]), .OB(TX0_TMDS_N[0])) ;
+   OBUFDS TMDS1 (.I(1'b0), .O(TX0_TMDS_P[1]), .OB(TX0_TMDS_N[1])) ;
+   OBUFDS TMDS2 (.I(1'b0), .O(TX0_TMDS_P[2]), .OB(TX0_TMDS_N[2])) ;
+   OBUFDS TMDS3 (.I(1'b0), .O(TX0_TMDS_P[3]), .OB(TX0_TMDS_N[3])) ;
+   
+`endif // !`ifdef HDMI
    
 endmodule // kovan
