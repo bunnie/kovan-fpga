@@ -171,6 +171,7 @@ module kovan (
    wire 	   clk26buf;
    wire 	   clk13buf;
    wire            clk3p2M; 
+   wire            clk1M;  // wired up in the serial number section
    
    assign clk26 = OSC_CLK;
    IBUFG clk26buf_ibuf(.I(clk26), .O(clk26ibuf));
@@ -178,9 +179,15 @@ module kovan (
 
    
    ////////// reset
-   wire 	   glbl_reset; // to be used sparingly
+   reg   	   glbl_reset; // to be used sparingly
+   wire            glbl_reset_edge;
+   reg 		   glbl_reset_edge_d;
 
-
+   always @(posedge clk1M) begin
+      glbl_reset_edge_d <= glbl_reset_edge;
+      glbl_reset <= !glbl_reset_edge_d & glbl_reset_edge; // just pulse reset for one cycle of the slowest clock in the system
+   end
+   
    ////////// loop-throughs
    // lcd runs at a target of 6.41 MHz (156 ns cycle time)
    // i.e., 408 x 262 x 60 Hz (408 is total H width, 320 active, etc.)
@@ -646,7 +653,6 @@ module kovan (
    ////////////////////////////////
    reg clk2M_unbuf;
    wire clk2M;
-   wire clk1M;
    reg 	clk1M_unbuf;
    always @(posedge clk26buf) begin
       clk2M_unbuf <= counter[4]; // 0.8MHz clock: device DNA only runs at 2 MHz
@@ -914,9 +920,10 @@ module kovan (
    /////////////////
    //  register 0x45: digital shift chain control
    //  bit 7  |  bit 6  |  bit 5  |  bit 4  |  bit 3  |  bit 2  |  bit 1  |  bit 0
-   //         |         |         |         |         |         |  SAMPLE |  UPDTE
+   //         |         |         |         |         |  RESET  |  SAMPLE |  UPDTE
    //  bit 0: on rising edge, update the digital pins with the loaded register values
    //  bit 1: on rising edge, sample all the digital inputs simultaneously
+   //  bit 2: main system reset
    //
    /////////////////
    //  register 0x46: ADC control
@@ -1174,7 +1181,7 @@ module kovan (
 		      .reg_42(dig_pu),
 		      .reg_43(ana_pu),
 		      // reg_44 unused
-		      .reg_45({dig_sample,dig_update}),
+		      .reg_45({glbl_reset_edge,dig_sample,dig_update}),
 		      .reg_46({adc_go,adc_chan[3:0]}),
 		      .reg_47({mot_allstop}),
 		      .reg_48(mot_drive_code),
@@ -1310,7 +1317,25 @@ module kovan (
    OBUFDS TMDS1 (.I(1'b0), .O(TX0_TMDS_P[1]), .OB(TX0_TMDS_N[1])) ;
    OBUFDS TMDS2 (.I(1'b0), .O(TX0_TMDS_P[2]), .OB(TX0_TMDS_N[2])) ;
    OBUFDS TMDS3 (.I(1'b0), .O(TX0_TMDS_P[3]), .OB(TX0_TMDS_N[3])) ;
+
+   assign DDC_SDA_PU = 1'b0;
+   assign DDC_SDA_PD = 1'b0;
    
+   assign VSYNC_STB = 1'b0;
+   assign HPD_OVERRIDE = 1'b0;
 `endif // !`ifdef HDMI
+
+`ifdef COMPLETE
+   
+`else
+   // some stand-ins while we complete the code
+   
+   assign CAM_PCLKI = 1'b0;
+   assign CAM_HSYNC = 1'b0;
+   assign CAM_VSYNC = 1'b0;
+   assign FPGA_MISO = 1'b0;
+   assign CAM_D[7:0] = 8'b0;
+   assign CHG_SHDN = 1'b1;
+`endif
    
 endmodule // kovan
