@@ -33,6 +33,8 @@ parameter C3_NUM_DQ_PINS          = 16;   // External memory data width
 parameter C3_MEM_ADDR_WIDTH       = 13;   // External memory address width
 parameter C3_MEM_BANKADDR_WIDTH   = 3;    // External memory bank address width
 
+`define HAS_DDR    // comment out to remove DDR interface (does not currently work)
+
 module kovan (
 	      // camera IF
 	      output wire [7:0] CAM_D,
@@ -102,8 +104,8 @@ module kovan (
 	      output wire       I2S_DI1,
 	      output wire       I2S_DO0,    // audio data from record
 	      input wire        I2S_DO1,
-	      input wire        I2S_LRCLK0, // left/right clock to codec
-	      output wire       I2S_LRCLK1,
+	      output wire       I2S_LRCLK0, // left/right clock to codec
+	      input wire        I2S_LRCLK1,
 
 	      // LCD output to display
 	      output wire [7:3] LCDO_B,  // note truncation of blue channel
@@ -170,7 +172,8 @@ module kovan (
    wire 	   clk26ibuf;
    wire 	   clk26buf;
    wire 	   clk13buf;
-   wire            clk3p2M; 
+   wire            clk3p2M;
+   wire 	   clk208M;
    wire            clk1M;  // wired up in the serial number section
    
    assign clk26 = OSC_CLK;
@@ -197,6 +200,7 @@ module kovan (
 				  .clk_out6p4(clk_qvga),
 				  .clk_out13(clk13buf),
 				  .clk_out3p25(clk3p2M), // note: a slight overclock (about 2%)
+				  .clk_out208(clk208M),
 				  .RESET(glbl_reset),
 				  .LOCKED(qvga_clkgen_locked) );
    
@@ -250,7 +254,7 @@ module kovan (
    assign I2S_CLK0 = I2S_CLK1;
    assign I2S_DI1 = I2S_DI0;
    assign I2S_DO0 = I2S_DO1;
-   assign I2S_LRCLK1 = I2S_LRCLK0;
+   assign I2S_LRCLK0 = I2S_LRCLK1;
    
    ///////////////////////////////////////////
    // motor control unit
@@ -281,7 +285,7 @@ module kovan (
    wire [23:0] servo3_pwm_pulse;
 
    robot_iface iface(.clk(clk13buf), .glbl_reset(glbl_reset),
-		     .clk_3p2MHz(clk3p2M),
+		     .clk_3p2MHz(clk3p2M), .clk_208MHz(clk208M),
 
 	     // digital i/o block
 	     .dig_out_val(dig_out_val),
@@ -336,7 +340,8 @@ module kovan (
 	     .DIG_CLR_N(DIG_CLR_N)
 		     );
    
-   
+
+`ifdef HAS_DDR   
    ///////////////////////////////////////////
    /////// DDR2 core 128 MB x 16 of memory, 312 MHz (624 Mt/s = 1.2 GiB/s)
    // generate a 312 MHz clock from the 26 MHz local buffer
@@ -632,7 +637,7 @@ module kovan (
 	 endcase // case (DDR2_RD_cstate)
       end // else: !if( ddr2_reset )
    end // always @ (posedge c3_clk0)
-
+`endif
    
   //////////////////////////////////////
   // cheezy low speed clock divider source
@@ -651,20 +656,16 @@ module kovan (
    ////////////////////////////////
    // serial number
    ////////////////////////////////
-   reg clk2M_unbuf;
-   wire clk2M;
    reg 	clk1M_unbuf;
    always @(posedge clk26buf) begin
-      clk2M_unbuf <= counter[4]; // 0.8MHz clock: device DNA only runs at 2 MHz
       clk1M_unbuf <= counter[6];
    end
    
-   BUFG clk2M_buf(.I(clk2M_unbuf), .O(clk2M));
    BUFG clk1M_buf(.I(clk1M_unbuf), .O(clk1M));
 
    wire dna_reset;
    sync_reset  dna_reset_sync(
-			  .clk(clk_2M),
+			  .clk(clk1M),
 			  .glbl_reset(glbl_reset),
 			  .reset(dna_reset) );
    
@@ -673,7 +674,7 @@ module kovan (
    wire dna_bit;
    reg [55:0] dna_data;
    
-   DNA_PORT device_dna( .CLK(clk2M), .DIN(1'b0), .DOUT(dna_bit), .READ(dna_pulse), .SHIFT(dna_shift) );
+   DNA_PORT device_dna( .CLK(clk1M), .DIN(1'b0), .DOUT(dna_bit), .READ(dna_pulse), .SHIFT(dna_shift) );
    
    parameter DNA_INIT =    4'b1 << 0;
    parameter DNA_PULSE =   4'b1 << 1;
@@ -686,7 +687,7 @@ module kovan (
    reg [(DNA_nSTATES-1):0] DNA_nstate;
    reg [5:0] 		   dna_shift_count;
 
-   always @ (posedge clk2M) begin
+   always @ (posedge clk1M) begin
       if (dna_reset)
 	DNA_cstate <= DNA_INIT; 
       else
@@ -712,7 +713,7 @@ module kovan (
       endcase // case (DNA_cstate)
    end
    
-   always @ (posedge clk2M) begin
+   always @ (posedge clk1M) begin
       if( dna_reset ) begin
 	   dna_shift_count <= 6'h0;
 	   dna_data <= 56'h0;
@@ -746,7 +747,7 @@ module kovan (
 	   end
 	 endcase // case (DNA_cstate)
       end // else: !if( dna_reset )
-   end // always @ (posedge clk2M or posedge ~rstbtn_n)
+   end // always @ (posedge clk1M or posedge ~rstbtn_n)
 
    ////////////////////////////////
    // heartbeat
@@ -755,9 +756,9 @@ module kovan (
 		 .bright(12'b0000_1111_1000), .dim(12'b0000_0001_0000) );
 
 `ifdef HDMI   
-   assign FPGA_LED = blue_led | HPD_N;
+   assign FPGA_LED = !blue_led | HPD_N;
 `else
-   assign FPGA_LED = blue_led;
+   assign FPGA_LED = !blue_led;
 `endif
 
 
@@ -958,21 +959,24 @@ module kovan (
    /////////////////
    //  register 4c-4b: motor PWM divider (MDIV)
    //  16-bit vaule specifying the divider for the motor PWM
-   //  The base clock for the motor PWM is 26 MHz / 4096. The final period for the PWM is thus:
-   //  6.347kHz / ( MDIV + 1 )
+   //  The base clock for the motor PWM is 208MHz / 4096 (from 12 bits res). 
+   //  The final period for the PWM is thus:
+   //  period = 50.78kHz / ( MDIV + 2)
+   //  period * MDIV + 2 * period = 50.78kHz
+   //  (50.78kHz - 2 * period) / period = MDIV
    //
    /////////////////
    //  register 4d-4f: servo PWM period (SPERIOD)
    //  24-bit value which specifies the length of the PWM period for the servo
    //  Servo PWM is custom-built for specifying sparse, high-resolution narrow pulse widths.
    //  The period for the servo is defined to be:
-   //  26 MHz / (SPERIOD + 1)
-   //  As SPERIOD is a 24-bit number, the longest period is thus 1.5 Hz.
+   //  13 MHz / (SPERIOD + 1)
+   //  As SPERIOD is a 24-bit number, the longest period is thus 0.75 Hz.
    //
    /////////////////
    //  register 50-52: servo 0 pulse width (S0PULSE)
    //  24-bit value which specifies the width of the servo pulse. The quanta for the value is
-   //  1/26 MHz = 38.4ns
+   //  1/13 MHz = 56.8ns
    //  Please note that the pulse width is not a percentage duty cycle, but an absolute time specifier
    //
    /////////////////
@@ -1133,7 +1137,7 @@ module kovan (
 		      .reg_1e(Km[47:40]),
 		      .reg_1f(Km[55:48]),
 `endif //  `ifdef HDMI
-		      
+
 `ifdef HDMI
 		      //// read-only registers after this point
 		      .reg_20(t_hactive[7:0]),
@@ -1173,7 +1177,7 @@ module kovan (
 		      .reg_3f(8'hFF),    // version number
 
 		      // extended register space:
-		      // reg 40 - reg 60 are write registers (32 locations, growable to 64)
+		      // reg 40 - reg 80 are write registers (64 locations)
 		      // reg 80 - reg C0 are read-only registers (64 locations)
 		      // write-only interfaces
 		      .reg_40(dig_out_val),
@@ -1220,6 +1224,7 @@ module kovan (
 		      .reg_67(ddr2_test_addr[29:24]),
 		      .reg_68(ddr2_regcmd[7:0]),
 
+		      // reg_0x78 - reg_0x7f reserved for loopback testing
 		      // read-only interfaces
 		      .reg_80({6'b0,dig_val_good, dig_busy}),
 		      .reg_81(adc_in[7:0]),
@@ -1236,12 +1241,34 @@ module kovan (
 
 		      /// extened version -- 32 bits to report versions
 		      /// kovan starts at FF.00.01.00.01
-		      .reg_fc(8'h1),  // this is the LSB of the extended version field
+		      .reg_fc(8'h3),  // this is the LSB of the extended version field
 		      .reg_fd(8'h0),
 		      .reg_fe(8'h1),
 		      .reg_ff(8'h0)   // this is the MSB of the extended version field
 		      );
      
+   /////// version FF.0001.0004 (log created 3/6/2012)
+   //
+   
+   /////// version FF.0001.0003 (log created 3/1/2012)
+   // - fix ADC bit width
+   // - fix digital input data bit position
+   // - fix serial number bug
+   // - increase motor PWM base clock rate to 208 MHz to allow for 10kHz 12-bit PWM control
+   // - decrease DNA clock rate to 1MHz; eliminate 2MHz clock line
+   // - clean up documentation around motor and servo dividers
+   // - fix ADC channel select bit position
+   // - all motor control functions validated
+
+   /////// version FF.0001.0002 (log created 3/1/2012)
+   // - reverse direction of LRCLK to accommodate ES8328 codec restrictions
+   
+   /////// version FF.0001.0001 changes (log created 2/18/2012)
+   // - branch to kovan
+   // - FF means to check auxiliary vesion field
+   // - initial checkin of code
+
+   ////////////////////////////// legacy changes
    /////// version 4 changes
    // - added input registers to LCD path to clean up timing
    // - added a pipeline stage to the core video processing pipe
@@ -1291,12 +1318,6 @@ module kovan (
    // - fix RGB color depth issue; turns out that extending the LSB's isn't the right way to do it.
    //   now, we truncate the unused bits to zero
 
-   /////// version FF.01.01.01.01 changes (log create 2/18/2012)
-   // - branch to kovan
-   // - FF means to check auxiliary vesion field
-   
-
-
    /////////////// dummy tie-downs
 `ifdef HDMI
 
@@ -1313,10 +1334,15 @@ module kovan (
    IBUFDS  #(.IOSTANDARD("TMDS_33"), .DIFF_TERM("FALSE") 
 	     ) ibuf_dummy3 (.I(RX0_TMDS_P[3]), .IB(RX0_TMDS_N[3]), .O(dummy_tmds[3]));
 
+   // just for testing for sean
    OBUFDS TMDS0 (.I(1'b0), .O(TX0_TMDS_P[0]), .OB(TX0_TMDS_N[0])) ;
    OBUFDS TMDS1 (.I(1'b0), .O(TX0_TMDS_P[1]), .OB(TX0_TMDS_N[1])) ;
    OBUFDS TMDS2 (.I(1'b0), .O(TX0_TMDS_P[2]), .OB(TX0_TMDS_N[2])) ;
    OBUFDS TMDS3 (.I(1'b0), .O(TX0_TMDS_P[3]), .OB(TX0_TMDS_N[3])) ;
+//   assign TX0_TMDS_P[0] = I2S_CLK1;
+//   assign TX0_TMDS_P[1] = I2S_DI1;
+//   assign TX0_TMDS_P[2] = I2S_LRCLK1;
+//   assign TX0_TMDS_P[3] = 1'b0;
 
    assign DDC_SDA_PU = 1'b0;
    assign DDC_SDA_PD = 1'b0;

@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 13.3
-# Date: Fri Feb 24 20:57:26 2012
+# Date: Mon Mar 05 13:28:11 2012
 #
 ##############################################################
 #
@@ -47,7 +47,7 @@ CSET clk_out2_port=clk_out13
 CSET clk_out2_use_fine_ps_gui=false
 CSET clk_out3_port=clk_out3p25
 CSET clk_out3_use_fine_ps_gui=false
-CSET clk_out4_port=CLK_OUT4
+CSET clk_out4_port=clk_out208
 CSET clk_out4_use_fine_ps_gui=false
 CSET clk_out5_port=CLK_OUT5
 CSET clk_out5_use_fine_ps_gui=false
@@ -84,9 +84,9 @@ CSET clkout3_requested_phase=0.000
 CSET clkout3_used=true
 CSET clkout4_drives=BUFG
 CSET clkout4_requested_duty_cycle=50.000
-CSET clkout4_requested_out_freq=2
+CSET clkout4_requested_out_freq=208
 CSET clkout4_requested_phase=0.000
-CSET clkout4_used=false
+CSET clkout4_used=true
 CSET clkout5_drives=BUFG
 CSET clkout5_requested_duty_cycle=50.000
 CSET clkout5_requested_out_freq=100.000
@@ -189,7 +189,7 @@ CSET mmcm_notes=None
 CSET mmcm_ref_jitter1=0.010
 CSET mmcm_ref_jitter2=0.010
 CSET mmcm_startup_wait=false
-CSET num_out_clks=3
+CSET num_out_clks=4
 CSET override_dcm=false
 CSET override_dcm_clkgen=false
 CSET override_mmcm=false
@@ -209,7 +209,7 @@ CSET pll_clkout1_phase=0.000
 CSET pll_clkout2_divide=128
 CSET pll_clkout2_duty_cycle=0.500
 CSET pll_clkout2_phase=0.000
-CSET pll_clkout3_divide=1
+CSET pll_clkout3_divide=2
 CSET pll_clkout3_duty_cycle=0.500
 CSET pll_clkout3_phase=0.000
 CSET pll_clkout4_divide=1
@@ -263,4 +263,4 @@ CSET use_status=false
 MISC pkg_timestamp=2011-03-09T16:42:33.000Z
 # END Extra information
 GENERATE
-# CRC: 923f793b
+# CRC: 9588c90e

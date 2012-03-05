@@ -29,6 +29,7 @@
 module robot_iface(
 	     input wire  clk,
 	     input wire  clk_3p2MHz,
+	     input wire  clk_208MHz,
 	     input wire  glbl_reset,
 
 	     // digital i/o block
@@ -126,7 +127,7 @@ module robot_iface(
    reg 			  update_dig;
    reg 			  busy;
    reg 			  dgood;
-   
+
       
    always @ (negedge clk) begin
       if (motor_reset)
@@ -166,6 +167,10 @@ module robot_iface(
 
    assign dig_busy = busy;
    assign dig_val_good = dgood;
+
+   // 0x40 ff ff ff  (locating input data on shift chain, in value = 0x81)
+   //  30       23        15                0
+   // 0100 0000 1111 1111 1111 1111 1111 1111
    
    //// note, we assume that DIG_SAMPLE is driven by user before this chain is triggered
    //// the split enables very precise user control over when sampling happens, versus readout
@@ -234,7 +239,7 @@ module robot_iface(
 	   
 	   dig_srload <= 1'b1;
 	   update_dig <= 1'b1;
-	   dig_in_val <= shift_in[14:7];
+	   dig_in_val <= shift_in[30:23];
 	   
 	   dgood <= 1'b1;
 	   busy <= 1'b0;
@@ -263,7 +268,7 @@ module robot_iface(
    reg [15:0] pwm_scaler;
    wire      pwmclk;
    
-   always @(posedge clk) begin
+   always @(posedge clk_208MHz) begin
       if( (pwm_scaler > mot_pwm_div) || (&pwm_scaler) ) begin
 	 pwm_scaler <= 0;
 	 pwm_clk_a <= 1;
@@ -273,7 +278,7 @@ module robot_iface(
       end
    end // always @ (posedge clk or posedge reset)
 
-   always @(posedge clk) begin
+   always @(posedge clk_208MHz) begin
       pwm_clk <= pwm_clk_a; // just to clean everything up, no glitches on clock
    end
 
@@ -410,7 +415,8 @@ module robot_iface(
 	end
 	ADC_START: begin
 	   adc_shift_count <= 5'b0;
-	   adc_shift_out <= {11'b0,adc_chan[0],adc_chan[1],adc_chan[2],2'b0};
+//	   adc_shift_out <= {11'b0,adc_chan[0],adc_chan[1],adc_chan[2],2'b0};
+	   adc_shift_out <= {2'b0,adc_chan[2],adc_chan[1],adc_chan[0],11'b0};
 	   adc_shift_in <= adc_shift_in;
 	   adc_cs <= adc_chan[3] ? 2'b01 : 2'b10;
 	   
@@ -442,7 +448,7 @@ module robot_iface(
 	   adc_cs <= 2'b11;
 	   
 	   adc_valid <= 1;
-	   adc_in <= adc_shift_in[13:4];
+	   adc_in <= adc_shift_in[11:2];
 	end
       endcase // case (ADC_cstate)
    end // always @ (posedge clk)
