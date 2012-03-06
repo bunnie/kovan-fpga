@@ -1254,6 +1254,7 @@ module kovan (
    // - modify dim/bright settings for heartbeat to make it more apparent
    // - fix DDR2 reset bug, core now runs instead of hanging in reset
    // - fix LCDO_G7 pin missing in .UCF file
+   // - improve timing closure for 208 MHz motor register interface
    
    /////// version FF.0001.0003 (log created 3/1/2012)
    // - fix ADC bit width

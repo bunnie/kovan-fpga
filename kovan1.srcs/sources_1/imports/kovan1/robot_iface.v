@@ -267,9 +267,12 @@ module robot_iface(
    reg pwm_clk_a;
    reg [15:0] pwm_scaler;
    wire      pwmclk;
-   
+   reg [15:0] mot_pwm_div_r;
+      
    always @(posedge clk_208MHz) begin
-      if( (pwm_scaler > mot_pwm_div) || (&pwm_scaler) ) begin
+      mot_pwm_div_r <= mot_pwm_div; // decouple timing to local domain
+      
+      if( (pwm_scaler > mot_pwm_div_r) || (&pwm_scaler) ) begin
 	 pwm_scaler <= 0;
 	 pwm_clk_a <= 1;
       end else begin
