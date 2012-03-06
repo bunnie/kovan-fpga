@@ -481,7 +481,7 @@ module kovan (
 
    // local reset timer for ddr2
    sync_reset  ddr2_reset_sync(
-			  .clk(c3_clk0),
+			  .clk(c3_sys_clk),
 			  .glbl_reset(!c3_clk_locked),
 			  .reset(ddr2_reset) );
    
@@ -753,7 +753,7 @@ module kovan (
    // heartbeat
    ////////////////////////////////
    pwm heartbeat(.clk812k(clk1M), .pwmout(blue_led),
-		 .bright(12'b0000_1111_1000), .dim(12'b0000_0001_0000) );
+		 .bright(12'b0001_1111_1000), .dim(12'b0000_0000_1000) );
 
 `ifdef HDMI   
    assign FPGA_LED = !blue_led | HPD_N;
@@ -1241,14 +1241,19 @@ module kovan (
 
 		      /// extened version -- 32 bits to report versions
 		      /// kovan starts at FF.00.01.00.01
-		      .reg_fc(8'h3),  // this is the LSB of the extended version field
+		      .reg_fc(8'h4),  // this is the LSB of the extended version field
 		      .reg_fd(8'h0),
 		      .reg_fe(8'h1),
 		      .reg_ff(8'h0)   // this is the MSB of the extended version field
 		      );
      
-   /////// version FF.0001.0004 (log created 3/6/2012)
+   /////// version FF.0001.0005 (log created 3/6/2012)
    //
+   
+   /////// version FF.0001.0004 (log created 3/6/2012)
+   // - modify dim/bright settings for heartbeat to make it more apparent
+   // - fix DDR2 reset bug, core now runs instead of hanging in reset
+   // - fix LCDO_G7 pin missing in .UCF file
    
    /////// version FF.0001.0003 (log created 3/1/2012)
    // - fix ADC bit width
