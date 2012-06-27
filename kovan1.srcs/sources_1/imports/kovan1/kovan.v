@@ -33,7 +33,7 @@ parameter C3_NUM_DQ_PINS          = 16;   // External memory data width
 parameter C3_MEM_ADDR_WIDTH       = 13;   // External memory address width
 parameter C3_MEM_BANKADDR_WIDTH   = 3;    // External memory bank address width
 
-`define HAS_DDR    // comment out to remove DDR interface (does not currently work)
+// `define HAS_DDR    // comment out to remove DDR interface (does not currently work)
 
 module kovan (
 	      // camera IF
@@ -144,6 +144,7 @@ module kovan (
 	      // LED
 	      output wire       FPGA_LED,
 
+`ifdef HAS_DDR   
 	      // mcb interface to DDR2
 	      inout  [C3_NUM_DQ_PINS-1:0]          mcb3_dram_dq,
 	      output [C3_MEM_ADDR_WIDTH-1:0]       mcb3_dram_a,
@@ -163,7 +164,8 @@ module kovan (
 	      inout                                mcb3_dram_dqs_n,
 	      output                               mcb3_dram_ck,
 	      output                               mcb3_dram_ck_n,
-
+`endif //  `ifdef HAS_DDR
+	      
 	      input wire       OSC_CLK   // 26 mhz clock from CPU
 	      );
 
@@ -1213,7 +1215,8 @@ module kovan (
 		      .reg_59(servo3_pwm_pulse[7:0]),
 		      .reg_5a(servo3_pwm_pulse[15:8]),
 		      .reg_5b(servo3_pwm_pulse[23:16]),
-		      
+
+`ifdef HAS_DDR   
 		      .reg_60(ddr2_write_data[7:0]),
 		      .reg_61(ddr2_write_data[15:8]),
 		      .reg_62(ddr2_write_data[23:16]),
@@ -1223,7 +1226,8 @@ module kovan (
 		      .reg_66(ddr2_test_addr[23:16]),
 		      .reg_67(ddr2_test_addr[29:24]),
 		      .reg_68(ddr2_regcmd[7:0]),
-
+`endif //  `ifdef HAS_DDR
+		      
 		      // reg_0x78 - reg_0x7f reserved for loopback testing
 		      // read-only interfaces
 		      .reg_80({6'b0,dig_val_good, dig_busy}),
@@ -1232,12 +1236,14 @@ module kovan (
 		      .reg_83({7'b0,adc_valid}),
 		      .reg_84(dig_in_val[7:0]),
 
+`ifdef HAS_DDR   
 		      .reg_90(ddr2_read_data[7:0]),
 		      .reg_91(ddr2_read_data[15:8]),
 		      .reg_92(ddr2_read_data[23:16]),
 		      .reg_93(ddr2_read_data[31:24]),
 		      .reg_94(ddr2_regstat[7:0]),
 		      .reg_95(ddr2_sm_dbg[7:0]),
+`endif //  `ifdef HAS_DDR
 
 		      /// extened version -- 32 bits to report versions
 		      /// kovan starts at FF.00.01.00.01
