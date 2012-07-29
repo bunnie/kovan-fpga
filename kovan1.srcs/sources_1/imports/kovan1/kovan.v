@@ -46,7 +46,7 @@ module kovan (
 
 	      // power management
 	      input wire CHG_ACP,           // reports presence of AC power
-	      output wire CHG_SHDN,         // pull low to turn board off
+//	      output wire CHG_SHDN,         // leave floating
 
 	      // HDMI
 	      input wire        CEC,
@@ -1247,14 +1247,21 @@ module kovan (
 
 		      /// extened version -- 32 bits to report versions
 		      /// kovan starts at FF.00.01.00.01
-		      .reg_fc(8'h4),  // this is the LSB of the extended version field
+		      .reg_fc(8'h6),  // this is the LSB of the extended version field
 		      .reg_fd(8'h0),
 		      .reg_fe(8'h1),
 		      .reg_ff(8'h0)   // this is the MSB of the extended version field
 		      );
      
+   /////// version FF.0001.0006 (log created 6/27/2012)
+   // - remove CHG_SHDN pin driving low, as this stops board charging.
+   //   removed such that it's left floating, due to incompatibility between
+   //   the function of the pin between v3.0 and v3.1 (once v3.1 is in
+   //   production and v3.0 is retired, this can be safely used)
+   
    /////// version FF.0001.0005 (log created 3/6/2012)
-   //
+   // - strip out DDR2 support, not needed for final design
+   // - fix PWM reset state so that it's 0 instead of 1
    
    /////// version FF.0001.0004 (log created 3/6/2012)
    // - modify dim/bright settings for heartbeat to make it more apparent
@@ -1373,7 +1380,7 @@ module kovan (
    assign CAM_VSYNC = 1'b0;
    assign FPGA_MISO = 1'b0;
    assign CAM_D[7:0] = 8'b0;
-   assign CHG_SHDN = 1'b1;
+//   assign CHG_SHDN = 1'b0; // leave floating as on-board pulldown does the trick
 `endif
    
 endmodule // kovan
